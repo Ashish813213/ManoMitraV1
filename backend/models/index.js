@@ -1,0 +1,20 @@
+// Export all models from a single file for easy imports
+module.exports = {
+  User: require('./User'),
+  Therapist: require('./Therapist'),
+  Session: require('./Session'),
+  ChatRoom: require('./ChatRoom'),
+  Message: require('./Message'),
+  Journal: require('./Journal'),
+  JournalAnalysis: require('./JournalAnalysis'),
+  Exercise: require('./Exercise'),
+  UserExerciseProgress: require('./UserExerciseProgress'),
+  AIConversation: require('./AIConversation'),
+  SafetyAlert: require('./SafetyAlert'),
+  MoodHistory: require('./MoodHistory'),
+  Resource: require('./Resource'),
+  Recommendation: require('./Recommendation'),
+  Workshop: require('./Workshop'),
+  Community: require('./Community'),
+  UserActivity: require('./UserActivity'),
+};
