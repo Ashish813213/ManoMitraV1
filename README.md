@@ -83,7 +83,7 @@ NEXT_PUBLIC_CHAT_API_URL=http://localhost:5001
 NLP_PORT=5001
 NODE_ENV=development
 MONGO_URI=mongodb://localhost:27017/manomitra
-NVIDIA_API_KEY=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
+NVIDIA_API_KEY=Your_key
 ```
 
 ---
