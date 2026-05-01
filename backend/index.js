@@ -19,6 +19,7 @@ const workshopsRoutes = require('./routes/workshops');
 const resourcesRoutes = require('./routes/resources');
 const communityRoutes = require('./routes/community');
 const chatRoutes = require('./routes/chat');
+const therapistsRoutes = require('./routes/therapists');
 
 const app = express();
 
@@ -46,6 +47,7 @@ app.use('/api/workshops', workshopsRoutes);
 app.use('/api/resources', resourcesRoutes);
 app.use('/api/community', communityRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/therapists', therapistsRoutes);
 
 // Health check endpoint
 app.get('/', (req, res) => {
