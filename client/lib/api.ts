@@ -385,3 +385,41 @@ export async function markRecommendationAsCompleted(recommendationId: string): P
 export async function dismissRecommendation(recommendationId: string): Promise<{ success: boolean; message: string }> {
   return apiFetch(`/recommendations/${recommendationId}/dismiss`, { method: 'POST', body: JSON.stringify({}) });
 }
+
+// Therapist types
+export type Therapist = {
+  _id: string;
+  userId: { _id: string; fullName: string; email: string; profile?: { age?: number; gender?: string; avatar?: string } };
+  qualifications: string;
+  experienceYears: number;
+  specialization: string[];
+  availability: { day: string; startTime: string; endTime: string }[];
+  rating: number;
+  totalSessions: number;
+  totalReviews: number;
+  isVerified: boolean;
+  bio?: string;
+  licenseNumber: string;
+  hourlyRate: number;
+  languages: string[];
+  isActive: boolean;
+};
+
+export async function getTherapists(specialization?: string, minRating?: number, verified?: boolean): Promise<{ success: boolean; count: number; therapists: Therapist[] }> {
+  const query = new URLSearchParams();
+  if (specialization) query.append('specialization', specialization);
+  if (minRating) query.append('minRating', minRating.toString());
+  if (verified) query.append('verified', 'true');
+  return apiFetch(`/therapists${query.toString() ? '?' + query.toString() : ''}`);
+}
+
+export async function getTherapist(id: string): Promise<{ success: boolean; therapist: Therapist }> {
+  return apiFetch(`/therapists/${id}`);
+}
+
+export async function bookTherapist(therapistId: string, scheduledAt: string): Promise<{ success: boolean; message: string; booking: { therapistId: string; userId: string; scheduledAt: string } }> {
+  return apiFetch(`/therapists/${therapistId}/book`, {
+    method: 'POST',
+    body: JSON.stringify({ scheduledAt }),
+  });
+}

@@ -472,10 +472,10 @@ export default function Dashboard() {
           </div>
           <div id="community-actions" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {[
-              { label: 'Start Meditation', icon: '🧘', href: '#resources', tone: 'from-violet-600 to-fuchsia-600' },
-              { label: 'Schedule Therapy', icon: '📅', href: '/contact', tone: 'from-emerald-600 to-teal-600' },
-              { label: 'Join Community', icon: '👥', href: '#community-actions', tone: 'from-amber-500 to-orange-500' },
-              { label: 'View Resources', icon: '📚', href: '#resources', tone: 'from-sky-600 to-indigo-600' },
+              { label: 'Start Meditation', icon: '🧘', href: '/meditation', tone: 'from-violet-600 to-fuchsia-600' },
+              { label: 'Schedule Therapy', icon: '📅', href: '/therapy', tone: 'from-emerald-600 to-teal-600' },
+              { label: 'Join Community', icon: '👥', href: '/community', tone: 'from-amber-500 to-orange-500' },
+              { label: 'View Resources', icon: '📚', href: '/resources', tone: 'from-sky-600 to-indigo-600' },
             ].map((action) => (
               <Link
                 key={action.label}
