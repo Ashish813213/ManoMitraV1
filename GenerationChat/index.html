@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ManoMITRA NLP Service - Web Interface</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .tab-btn {
+            padding: 10px 20px;
+            border: 2px solid white;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            cursor: pointer;
+            border-radius: 25px;
+            font-size: 1em;
+            transition: all 0.3s;
+            font-weight: 500;
+        }
+
+        .tab-btn:hover {
+            background: rgba(255,255,255,0.3);
+            transform: translateY(-2px);
+        }
+
+        .tab-btn.active {
+            background: white;
+            color: #667eea;
+        }
+
+        .tab-content {
+            display: none;
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            animation: fadeIn 0.3s;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        input[type="text"],
+        input[type="email"],
+        textarea,
+        select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1em;
+            font-family: inherit;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus,
+        input[type="email"]:focus,
+        textarea:focus,
+        select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 120px;
+        }
+
+        .checkbox-group {
+            display: flex;
+            gap: 20px;
+            margin-top: 10px;
+        }
+
+        .checkbox-group label {
+            display: flex;
+            align-items: center;
+            margin-bottom: 0;
+            font-weight: 400;
+        }
+
+        input[type="checkbox"] {
+            margin-right: 8px;
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 25px;
+        }
+
+        button {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            flex: 1;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        .response-container {
+            margin-top: 30px;
+            display: none;
+        }
+
+        .response-container.show {
+            display: block;
+        }
+
+        .response-header {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 8px 8px 0 0;
+            border-left: 4px solid #667eea;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .response-body {
+            background: #fafafa;
+            padding: 20px;
+            border-radius: 0 0 8px 8px;
+            border: 1px solid #e0e0e0;
+            border-top: none;
+        }
+
+        .response-body pre {
+            background: white;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            border: 1px solid #e0e0e0;
+            font-size: 0.9em;
+            line-height: 1.5;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+            margin-top: 10px;
+        }
+
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status-loading {
+            background: #cce5ff;
+            color: #004085;
+        }
+
+        .sentiment-bar {
+            display: flex;
+            gap: 5px;
+            margin-top: 10px;
+        }
+
+        .bar-section {
+            height: 20px;
+            border-radius: 3px;
+            flex: 0 0 auto;
+        }
+
+        .bar-positive { background: #28a745; }
+        .bar-negative { background: #dc3545; }
+        .bar-neutral { background: #6c757d; }
+
+        .emotion-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: 600;
+            margin-right: 10px;
+            margin-top: 10px;
+        }
+
+        .safety-alert {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 15px;
+        }
+
+        .safety-alert.critical {
+            background: #f8d7da;
+            border-left-color: #dc3545;
+        }
+
+        .safety-alert.high {
+            background: #f8d7da;
+            border-left-color: #dc3545;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .endpoint-info {
+            background: #e7f3ff;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            font-size: 0.95em;
+        }
+
+        .suggestions-list {
+            list-style: none;
+            margin-top: 10px;
+        }
+
+        .suggestions-list li {
+            background: #e8f4f8;
+            padding: 10px 15px;
+            margin: 5px 0;
+            border-left: 3px solid #667eea;
+            border-radius: 3px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+
+            header h1 {
+                font-size: 1.8em;
+            }
+
+            .tabs {
+                flex-direction: column;
+            }
+
+            .tab-btn {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🧠 ManoMITRA NLP Service</h1>
+            <p>Mental Health & Wellness Support AI Platform</p>
+        </header>
+
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('health')">Health Check</button>
+            <button class="tab-btn" onclick="switchTab('analyze')">Analyze</button>
+            <button class="tab-btn" onclick="switchTab('chat')">Chat</button>
+            <button class="tab-btn" onclick="switchTab('sentiment')">Sentiment</button>
+            <button class="tab-btn" onclick="switchTab('emotion')">Emotion</button>
+            <button class="tab-btn" onclick="switchTab('safety')">Safety</button>
+        </div>
+
+        <!-- Health Check Tab -->
+        <div id="health" class="tab-content active">
+            <div class="endpoint-info">
+                <strong>GET /health</strong> - Check if the service is running and healthy
+            </div>
+            <button class="btn-primary" onclick="checkHealth()" style="width: 100%;">Check Health Status</button>
+            <div id="health-response" class="response-container"></div>
+        </div>
+
+        <!-- Analyze Tab -->
+        <div id="analyze" class="tab-content">
+            <div class="endpoint-info">
+                <strong>POST /analyze</strong> - Full NLP analysis (sentiment + emotion + safety)
+            </div>
+            <div class="form-group">
+                <label for="analyze-text">Enter Text:</label>
+                <textarea id="analyze-text" placeholder="I have been feeling really sad and hopeless lately..."></textarea>
+            </div>
+            <div class="form-group">
+                <label>Options:</label>
+                <div class="checkbox-group">
+                    <label><input type="checkbox" id="analyze-emotion" checked> Include Emotion Detection</label>
+                    <label><input type="checkbox" id="analyze-safety" checked> Include Safety Detection</label>
+                </div>
+            </div>
+            <div class="button-group">
+                <button class="btn-primary" onclick="analyzeText()">Analyze</button>
+                <button class="btn-secondary" onclick="clearAnalyze()">Clear</button>
+            </div>
+            <div id="analyze-response" class="response-container"></div>
+        </div>
+
+        <!-- Chat Tab -->
+        <div id="chat" class="tab-content">
+            <div class="endpoint-info">
+                <strong>POST /chat</strong> - AI chat generation with sentiment & emotion analysis
+            </div>
+            <div class="form-group">
+                <label for="chat-message">Your Message:</label>
+                <textarea id="chat-message" placeholder="I am feeling anxious about my work presentation tomorrow..."></textarea>
+            </div>
+            <div class="form-group">
+                <label for="chat-user-id">User ID (Optional):</label>
+                <input type="text" id="chat-user-id" placeholder="user_123">
+            </div>
+            <div class="form-group">
+                <label for="chat-conv-id">Conversation ID (Optional):</label>
+                <input type="text" id="chat-conv-id" placeholder="conv_456">
+            </div>
+            <div class="button-group">
+                <button class="btn-primary" onclick="chatMessage()">Send</button>
+                <button class="btn-secondary" onclick="clearChat()">Clear</button>
+            </div>
+            <div id="chat-response" class="response-container"></div>
+        </div>
+
+        <!-- Sentiment Tab -->
+        <div id="sentiment" class="tab-content">
+            <div class="endpoint-info">
+                <strong>POST /sentiment</strong> - Dedicated sentiment analysis using VADER
+            </div>
+            <div class="form-group">
+                <label for="sentiment-text">Enter Text:</label>
+                <textarea id="sentiment-text" placeholder="I had a wonderful day today!"></textarea>
+            </div>
+            <div class="button-group">
+                <button class="btn-primary" onclick="analyzeSentiment()">Analyze Sentiment</button>
+                <button class="btn-secondary" onclick="clearSentiment()">Clear</button>
+            </div>
+            <div id="sentiment-response" class="response-container"></div>
+        </div>
+
+        <!-- Emotion Tab -->
+        <div id="emotion" class="tab-content">
+            <div class="endpoint-info">
+                <strong>POST /emotion</strong> - Emotion detection (happy, sad, angry, anxious, calm, confused, hopeful, neutral)
+            </div>
+            <div class="form-group">
+                <label for="emotion-text">Enter Text:</label>
+                <textarea id="emotion-text" placeholder="I am so frustrated and angry right now!"></textarea>
+            </div>
+            <div class="button-group">
+                <button class="btn-primary" onclick="detectEmotion()">Detect Emotion</button>
+                <button class="btn-secondary" onclick="clearEmotion()">Clear</button>
+            </div>
+            <div id="emotion-response" class="response-container"></div>
+        </div>
+
+        <!-- Safety Tab -->
+        <div id="safety" class="tab-content">
+            <div class="endpoint-info">
+                <strong>POST /safety</strong> - Safety risk detection (low, medium, high, critical)
+            </div>
+            <div class="form-group">
+                <label for="safety-text">Enter Text:</label>
+                <textarea id="safety-text" placeholder="I cannot take this anymore..."></textarea>
+            </div>
+            <div class="button-group">
+                <button class="btn-primary" onclick="detectSafety()">Check Safety</button>
+                <button class="btn-secondary" onclick="clearSafety()">Clear</button>
+            </div>
+            <div id="safety-response" class="response-container"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:5001';
+
+        function switchTab(tab) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+
+            // Show selected tab
+            document.getElementById(tab).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        function showLoading(elementId) {
+            const container = document.getElementById(elementId);
+            container.classList.add('show');
+            container.innerHTML = `
+                <div class="response-header">Loading...</div>
+                <div class="response-body">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function showResponse(elementId, title, data, status = 'success') {
+            const container = document.getElementById(elementId);
+            container.classList.add('show');
+
+            const statusClass = status === 'success' ? 'status-success' : 'status-error';
+            const statusText = status === 'success' ? '✓ Success' : '✗ Error';
+
+            container.innerHTML = `
+                <div class="response-header">
+                    ${title}
+                    <span class="status-badge ${statusClass}">${statusText}</span>
+                </div>
+                <div class="response-body">
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                </div>
+            `;
+        }
+
+        // Health Check
+        async function checkHealth() {
+            showLoading('health-response');
+            try {
+                const response = await fetch(`${API_URL}/health`);
+                const data = await response.json();
+                showResponse('health-response', 'Health Check Response', data);
+            } catch (error) {
+                showResponse('health-response', 'Health Check Error', { error: error.message }, 'error');
+            }
+        }
+
+        // Analyze
+        async function analyzeText() {
+            const text = document.getElementById('analyze-text').value.trim();
+            if (!text) {
+                alert('Please enter text to analyze');
+                return;
+            }
+
+            showLoading('analyze-response');
+            try {
+                const response = await fetch(`${API_URL}/analyze`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        text: text,
+                        include_emotion: document.getElementById('analyze-emotion').checked,
+                        include_safety: document.getElementById('analyze-safety').checked
+                    })
+                });
+                const data = await response.json();
+                showResponse('analyze-response', 'Analysis Response', data, data.success ? 'success' : 'error');
+            } catch (error) {
+                showResponse('analyze-response', 'Analysis Error', { error: error.message }, 'error');
+            }
+        }
+
+        function clearAnalyze() {
+            document.getElementById('analyze-text').value = '';
+            document.getElementById('analyze-response').classList.remove('show');
+        }
+
+        // Chat
+        async function chatMessage() {
+            const message = document.getElementById('chat-message').value.trim();
+            if (!message) {
+                alert('Please enter a message');
+                return;
+            }
+
+            showLoading('chat-response');
+            try {
+                const response = await fetch(`${API_URL}/chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_message: message,
+                        user_id: document.getElementById('chat-user-id').value || undefined,
+                        conversation_id: document.getElementById('chat-conv-id').value || undefined
+                    })
+                });
+                const data = await response.json();
+                showResponse('chat-response', 'Chat Response', data, data.success ? 'success' : 'error');
+            } catch (error) {
+                showResponse('chat-response', 'Chat Error', { error: error.message }, 'error');
+            }
+        }
+
+        function clearChat() {
+            document.getElementById('chat-message').value = '';
+            document.getElementById('chat-user-id').value = '';
+            document.getElementById('chat-conv-id').value = '';
+            document.getElementById('chat-response').classList.remove('show');
+        }
+
+        // Sentiment
+        async function analyzeSentiment() {
+            const text = document.getElementById('sentiment-text').value.trim();
+            if (!text) {
+                alert('Please enter text');
+                return;
+            }
+
+            showLoading('sentiment-response');
+            try {
+                const response = await fetch(`${API_URL}/sentiment`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: text })
+                });
+                const data = await response.json();
+                showResponse('sentiment-response', 'Sentiment Analysis', data, data.success ? 'success' : 'error');
+            } catch (error) {
+                showResponse('sentiment-response', 'Sentiment Error', { error: error.message }, 'error');
+            }
+        }
+
+        function clearSentiment() {
+            document.getElementById('sentiment-text').value = '';
+            document.getElementById('sentiment-response').classList.remove('show');
+        }
+
+        // Emotion
+        async function detectEmotion() {
+            const text = document.getElementById('emotion-text').value.trim();
+            if (!text) {
+                alert('Please enter text');
+                return;
+            }
+
+            showLoading('emotion-response');
+            try {
+                const response = await fetch(`${API_URL}/emotion`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: text })
+                });
+                const data = await response.json();
+                showResponse('emotion-response', 'Emotion Detection', data, data.success ? 'success' : 'error');
+            } catch (error) {
+                showResponse('emotion-response', 'Emotion Error', { error: error.message }, 'error');
+            }
+        }
+
+        function clearEmotion() {
+            document.getElementById('emotion-text').value = '';
+            document.getElementById('emotion-response').classList.remove('show');
+        }
+
+        // Safety
+        async function detectSafety() {
+            const text = document.getElementById('safety-text').value.trim();
+            if (!text) {
+                alert('Please enter text');
+                return;
+            }
+
+            showLoading('safety-response');
+            try {
+                const response = await fetch(`${API_URL}/safety`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: text })
+                });
+                const data = await response.json();
+                showResponse('safety-response', 'Safety Detection', data, data.success ? 'success' : 'error');
+            } catch (error) {
+                showResponse('safety-response', 'Safety Error', { error: error.message }, 'error');
+            }
+        }
+
+        function clearSafety() {
+            document.getElementById('safety-text').value = '';
+            document.getElementById('safety-response').classList.remove('show');
+        }
+
+        // Sample data
+        window.addEventListener('load', () => {
+            document.getElementById('analyze-text').value = 'I have been feeling really sad and hopeless lately. Everything seems pointless.';
+            document.getElementById('chat-message').value = 'I am feeling anxious about my work presentation tomorrow.';
+            document.getElementById('sentiment-text').value = 'I had a wonderful day today! Everything went perfectly.';
+            document.getElementById('emotion-text').value = 'I am so frustrated and angry right now!';
+            document.getElementById('safety-text').value = 'I cannot take this anymore. I do not want to live.';
+        });
+    </script>
+</body>
+</html>

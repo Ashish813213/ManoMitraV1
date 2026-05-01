@@ -1,0 +1,309 @@
+===============================================================================
+ManoMITRA NLP Service - Dummy Input Examples
+===============================================================================
+Base URL: http://localhost:5001
+
+================================================================================
+1. HEALTH CHECK ENDPOINT (GET)
+================================================================================
+Endpoint: GET /health
+Description: Check if the service is running and healthy
+
+CURL:
+------
+curl -X GET http://localhost:5001/health
+
+Response Example:
+{
+  "status": "healthy",
+  "service": "ManoMITRA NLP Service",
+  "timestamp": "2026-05-01T10:30:00.123456"
+}
+
+
+================================================================================
+2. ANALYZE ENDPOINT (POST) - Full Analysis
+================================================================================
+Endpoint: POST /analyze
+Description: Complete NLP analysis including sentiment, emotion, and safety detection
+Required: text
+Optional: include_emotion (bool), include_safety (bool)
+
+CURL:
+------
+curl -X POST http://localhost:5001/analyze \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "I have been feeling really sad and hopeless lately. Everything seems pointless.",
+    "include_emotion": true,
+    "include_safety": true
+  }'
+
+JSON Payload:
+------
+{
+  "text": "I have been feeling really sad and hopeless lately. Everything seems pointless.",
+  "include_emotion": true,
+  "include_safety": true
+}
+
+Response Example:
+{
+  "success": true,
+  "text_length": 65,
+  "sentiment": {
+    "sentiment_score": -0.75,
+    "compound": -0.75,
+    "positive": 0.0,
+    "negative": 0.85,
+    "neutral": 0.15,
+    "sentiment_label": "negative"
+  },
+  "emotion": {
+    "emotion": "sad",
+    "confidence": 0.92,
+    "method": "model"
+  },
+  "safety": {
+    "risk_level": "medium",
+    "keywords_detected": ["hopeless", "pointless"],
+    "immediate_action_required": false
+  },
+  "timestamp": "2026-05-01T10:30:00.123456"
+}
+
+
+================================================================================
+3. CHAT ENDPOINT (POST) - AI Chat Generation
+================================================================================
+Endpoint: POST /chat
+Description: Generate AI-powered empathetic chat responses
+Required: user_message
+Optional: user_id, conversation_id
+
+CURL:
+------
+curl -X POST http://localhost:5001/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_message": "I am feeling anxious about my work presentation tomorrow. I am nervous and cannot sleep.",
+    "user_id": "user_123",
+    "conversation_id": "conv_456"
+  }'
+
+JSON Payload:
+------
+{
+  "user_message": "I am feeling anxious about my work presentation tomorrow. I am nervous and cannot sleep.",
+  "user_id": "user_123",
+  "conversation_id": "conv_456"
+}
+
+Response Example:
+{
+  "success": true,
+  "ai_message": "Anxiety can feel overwhelming. I'm here to help you through this.\n\nRemember: you've made it through 100% of your worst days so far.\n\nTaking slow, deep breaths can help calm your nervous system. Try breathing in for 4, holding for 4, and out for 4.",
+  "reasoning": "Extended thinking about anxiety management strategies",
+  "suggestions": [
+    "Try a 5-minute breathing exercise",
+    "Practice the 5-4-3-2-1 grounding technique",
+    "Listen to calming music"
+  ],
+  "resources": [
+    {
+      "title": "Anxiety Techniques",
+      "url": "https://www.nimh.nih.gov/anxiety"
+    }
+  ],
+  "analysis": {
+    "sentiment": -0.45,
+    "sentiment_label": "negative",
+    "emotion": "anxious",
+    "emotion_confidence": 0.88
+  },
+  "safety_alert": false,
+  "safety_details": null,
+  "model_used": "nvidia-nemotron",
+  "timestamp": "2026-05-01T10:30:00.123456"
+}
+
+
+================================================================================
+4. SENTIMENT ANALYSIS ENDPOINT (POST)
+================================================================================
+Endpoint: POST /sentiment
+Description: Dedicated sentiment analysis using VADER
+Required: text
+
+CURL:
+------
+curl -X POST http://localhost:5001/sentiment \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "I had a wonderful day today! Everything went perfectly and I feel so happy and grateful."
+  }'
+
+JSON Payload:
+------
+{
+  "text": "I had a wonderful day today! Everything went perfectly and I feel so happy and grateful."
+}
+
+Response Example:
+{
+  "success": true,
+  "sentiment": {
+    "sentiment_score": 0.85,
+    "compound": 0.85,
+    "positive": 0.78,
+    "negative": 0.0,
+    "neutral": 0.22,
+    "sentiment_label": "positive"
+  }
+}
+
+
+================================================================================
+5. EMOTION DETECTION ENDPOINT (POST)
+================================================================================
+Endpoint: POST /emotion
+Description: Detect emotion from text (happy, sad, angry, anxious, calm, confused, hopeful, neutral)
+Required: text
+
+CURL:
+------
+curl -X POST http://localhost:5001/emotion \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "I am so frustrated and angry! This is absolutely infuriating and unacceptable!"
+  }'
+
+JSON Payload:
+------
+{
+  "text": "I am so frustrated and angry! This is absolutely infuriating and unacceptable!"
+}
+
+Response Example:
+{
+  "success": true,
+  "emotion": {
+    "emotion": "angry",
+    "confidence": 0.95,
+    "method": "model"
+  }
+}
+
+
+================================================================================
+6. SAFETY DETECTION ENDPOINT (POST)
+================================================================================
+Endpoint: POST /safety
+Description: Detect safety concerns and risk levels (low, medium, high, critical)
+Required: text
+
+CURL:
+------
+curl -X POST http://localhost:5001/safety \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "I cannot take this anymore. I do not want to live. Everything is hopeless and I am worthless."
+  }'
+
+JSON Payload:
+------
+{
+  "text": "I cannot take this anymore. I do not want to live. Everything is hopeless and I am worthless."
+}
+
+Response Example:
+{
+  "success": true,
+  "safety": {
+    "risk_level": "high",
+    "keywords_detected": ["cannot take it", "do not want to live", "hopeless", "worthless"],
+    "immediate_action_required": true
+  }
+}
+
+
+================================================================================
+ADDITIONAL TEST CASES - Comprehensive Test Suite
+================================================================================
+
+TEST CASE 1: Happy/Positive Sentiment
+Text: "I passed my exams with flying colors! I am so excited and proud of my achievements!"
+Expected: positive sentiment, happy emotion, low safety risk
+
+TEST CASE 2: Neutral/Calm
+Text: "Today was an ordinary day. I did my work and came home. Nothing special happened."
+Expected: neutral sentiment, neutral emotion, low safety risk
+
+TEST CASE 3: Confused/Uncertain
+Text: "I do not know what to do. I am confused about my future and career choices."
+Expected: negative sentiment, confused emotion, low safety risk
+
+TEST CASE 4: Critical Safety Risk
+Text: "I think I should kill myself. My life is pointless and everyone would be better off without me."
+Expected: very negative sentiment, sad emotion, critical safety risk
+
+TEST CASE 5: Mild Anxiety
+Text: "I am a bit worried about the upcoming exam but I think I can handle it."
+Expected: negative sentiment, anxious emotion, low-medium safety risk
+
+
+================================================================================
+HOW TO USE THESE EXAMPLES
+================================================================================
+
+Option 1: Use with curl (command line)
+- Copy any CURL command from above
+- Run it in your terminal
+- The service will respond with JSON
+
+Option 2: Use with Python requests
+- Write a Python script using the requests library
+- Send POST requests with the JSON payloads provided
+- Parse the JSON response
+
+Option 3: Use with Postman or similar tool
+- Import the curl commands or create requests manually
+- Test each endpoint systematically
+- Monitor response times and status codes
+
+Option 4: Batch Testing
+- Create a test script that runs all endpoints
+- Verify all responses match expected formats
+- Log results for debugging
+
+
+================================================================================
+EXPECTED RESPONSE FORMATS
+================================================================================
+
+All successful responses will have:
+- "success": true
+- "timestamp": ISO 8601 datetime string
+- Endpoint-specific data (sentiment, emotion, safety, etc.)
+
+All error responses will have:
+- "success": false
+- "error": error message string
+
+Status Codes:
+- 200: Success
+- 400: Bad request (missing required field)
+- 500: Server error
+
+
+================================================================================
+NOTES
+================================================================================
+
+- The /health endpoint is a GET request (all others are POST)
+- The /chat endpoint generates empathetic AI responses
+- The /analyze endpoint runs all detections at once (most comprehensive)
+- Individual endpoints (/sentiment, /emotion, /safety) are useful for specific tasks
+- User can be stored in MongoDB if user_id is provided in /chat request
+- Safety risk levels: low, medium, high, critical
+- Emotion labels: happy, sad, angry, anxious, calm, confused, hopeful, neutral

@@ -81,6 +81,7 @@ Client receives: ai_message, sentiment, emotion, safety_alert, suggestions
 ### 1. Install Dependencies
 
 ```bash
+.venv310\Scripts\activate
 pip install -r requirements.txt
 ```
 

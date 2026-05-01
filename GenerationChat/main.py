@@ -16,7 +16,7 @@ import json
 import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Tuple, Optional
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from dotenv import load_dotenv
 import numpy as np
@@ -487,6 +487,40 @@ class ChatGenerator:
         }
         
         return resources_map.get(emotion, [])
+
+
+# =============================================================================
+# Web Interface Routes
+# =============================================================================
+
+@app.route('/', methods=['GET'])
+def index():
+    """Serve the web interface"""
+    try:
+        index_path = os.path.join(os.path.dirname(__file__), 'index.html')
+        return send_file(index_path)
+    except Exception as e:
+        logger.error(f"Error serving index.html: {e}")
+        return jsonify({'error': 'Could not load web interface'}), 500
+
+
+@app.route('/api', methods=['GET'])
+def api_docs():
+    """API documentation endpoint"""
+    return jsonify({
+        'service': 'ManoMITRA NLP Service',
+        'version': '1.0.0',
+        'description': 'Natural Language Processing and AI Chat Generation for Mental Health',
+        'endpoints': {
+            '/health': 'GET - Health check',
+            '/analyze': 'POST - Full NLP analysis',
+            '/chat': 'POST - AI chat generation',
+            '/sentiment': 'POST - Sentiment analysis',
+            '/emotion': 'POST - Emotion detection',
+            '/safety': 'POST - Safety risk detection'
+        },
+        'web_interface': 'http://localhost:5001'
+    }), 200
 
 
 # =============================================================================
