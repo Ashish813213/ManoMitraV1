@@ -240,8 +240,13 @@ export type ChatMessage = {
   _id: string;
   conversationId: string;
   sender: 'user' | 'ai';
+  role?: 'user' | 'ai';
   content: string;
   timestamp: string;
+  emotionLabel?: string;
+  sentimentScore?: number;
+  reasoning?: string;
+  suggestions?: string[];
 };
 
 export type ChatResponse = {
@@ -323,32 +328,60 @@ export async function completeExercise(exerciseId: string, data: ExerciseComplet
 // Journal types
 export type JournalEntry = {
   _id: string;
+  userId: string;
   title: string;
   content: string;
-  mood: number;
-  emotion: string;
+  moodScore: number;
+  detectedEmotion: string;
+  sentimentScore: number;
+  aiReflection?: string;
   tags: string[];
+  isPrivate: boolean;
+  isPinned: boolean;
+  triggers: string[];
+  coping: string[];
+  gratitude: string[];
   createdAt: string;
-  insights?: string;
+  updatedAt: string;
 };
 
-export async function createJournalEntry(title: string, content: string, mood?: number, emotion?: string, tags?: string[]): Promise<{ success: boolean; entry: JournalEntry }> {
+export type JournalTrendData = {
+  journalCount: number;
+  averageMood: number;
+  averageSentiment: number;
+  lowestMood: number;
+  highestMood: number;
+  moodTrend: { date: string; mood: number; title: string }[];
+  sentimentTrend: { date: string; sentiment: number; title: string }[];
+  emotionDistribution: Record<string, number>;
+  tagFrequency: Record<string, number>;
+  recentEntries: JournalEntry[];
+};
+
+export async function createJournalEntry(data: { title: string; content: string; moodScore: number; tags?: string[] }): Promise<{ success: boolean; message: string; journal: JournalEntry }> {
   return apiFetch('/journals', {
     method: 'POST',
-    body: JSON.stringify({ title, content, mood, emotion, tags }),
+    body: JSON.stringify(data),
   });
 }
 
-export async function getJournalEntries(limit?: number): Promise<{ success: boolean; entries: JournalEntry[]; count: number }> {
-  const query = limit ? `?limit=${limit}` : '';
+export async function getJournalEntries(limit?: number, skip?: number, sortBy?: string, search?: string, emotion?: string, tag?: string): Promise<{ success: boolean; count: number; total: number; journals: JournalEntry[] }> {
+  const params = new URLSearchParams();
+  if (limit) params.append('limit', String(limit));
+  if (skip) params.append('skip', String(skip));
+  if (sortBy) params.append('sortBy', sortBy);
+  if (search) params.append('search', search);
+  if (emotion) params.append('emotion', emotion);
+  if (tag) params.append('tag', tag);
+  const query = params.toString() ? `?${params.toString()}` : '';
   return apiFetch(`/journals${query}`);
 }
 
-export async function getJournalEntry(id: string): Promise<{ success: boolean; entry: JournalEntry }> {
+export async function getJournalEntry(id: string): Promise<{ success: boolean; journal: JournalEntry }> {
   return apiFetch(`/journals/${id}`);
 }
 
-export async function updateJournalEntry(id: string, data: Partial<JournalEntry>): Promise<{ success: boolean; entry: JournalEntry }> {
+export async function updateJournalEntry(id: string, data: { title?: string; content?: string; moodScore?: number; tags?: string[]; triggers?: string[]; coping?: string[] }): Promise<{ success: boolean; message: string; journal: JournalEntry }> {
   return apiFetch(`/journals/${id}`, {
     method: 'PUT',
     body: JSON.stringify(data),
@@ -357,6 +390,14 @@ export async function updateJournalEntry(id: string, data: Partial<JournalEntry>
 
 export async function deleteJournalEntry(id: string): Promise<{ success: boolean; message: string }> {
   return apiFetch(`/journals/${id}`, { method: 'DELETE' });
+}
+
+export async function getJournalTrends(days?: number): Promise<{ success: boolean; data: JournalTrendData }> {
+  return apiFetch(`/journals/analytics/trends?days=${days || 30}`);
+}
+
+export async function getMoodTrend(days?: number): Promise<{ success: boolean; data: { journalCount: number; averageMood: number; lowestMood: number; highestMood: number; journals: JournalEntry[] } }> {
+  return apiFetch(`/journals/analytics/mood-trend?days=${days || 30}`);
 }
 
 // Workshop registration

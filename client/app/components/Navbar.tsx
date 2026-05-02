@@ -25,19 +25,7 @@ export default function Navbar() {
             ManoMITRA
           </Link>
 
-          <div className="hidden md:flex space-x-8 items-center">
-            <Link href="/" className="hover:text-blue-200 transition font-semibold">
-              Home
-            </Link>
-            <Link href="/about" className="hover:text-blue-200 transition font-semibold">
-              About
-            </Link>
-            <Link href="/get-started" className="hover:text-blue-200 transition font-semibold">
-              Get Started
-            </Link>
-            <Link href="/contact" className="hover:text-blue-200 transition font-semibold">
-              Contact
-            </Link>
+          <div className="hidden md:flex space-x-6 items-center">
             {user ? (
               <>
                 <Link
@@ -45,6 +33,24 @@ export default function Navbar() {
                   className="hover:text-blue-200 transition font-semibold"
                 >
                   Dashboard
+                </Link>
+                <Link
+                  href="/journal"
+                  className="hover:text-blue-200 transition font-semibold"
+                >
+                  Journal
+                </Link>
+                <Link
+                  href="/chat"
+                  className="hover:text-blue-200 transition font-semibold"
+                >
+                  AI Chat
+                </Link>
+                <Link
+                  href="/mood"
+                  className="hover:text-blue-200 transition font-semibold"
+                >
+                  Mood Tracker
                 </Link>
                 <span className="text-sm text-blue-200">Hi, {user.fullName}</span>
                 <button
@@ -56,6 +62,18 @@ export default function Navbar() {
               </>
             ) : (
               <>
+                <Link href="/" className="hover:text-blue-200 transition font-semibold">
+                  Home
+                </Link>
+                <Link href="/about" className="hover:text-blue-200 transition font-semibold">
+                  About
+                </Link>
+                <Link href="/get-started" className="hover:text-blue-200 transition font-semibold">
+                  Get Started
+                </Link>
+                <Link href="/contact" className="hover:text-blue-200 transition font-semibold">
+                  Contact
+                </Link>
                 <Link
                   href="/login"
                   className="bg-white text-blue-600 px-4 py-2 rounded-lg font-semibold hover:bg-blue-100 transition"
@@ -84,22 +102,19 @@ export default function Navbar() {
 
         {isOpen && (
           <div className="md:hidden pb-4 space-y-2">
-            <Link href="/" className="block py-2 hover:bg-blue-700 px-2 rounded transition" onClick={() => setIsOpen(false)}>
-              Home
-            </Link>
-            <Link href="/about" className="block py-2 hover:bg-blue-700 px-2 rounded transition" onClick={() => setIsOpen(false)}>
-              About
-            </Link>
-            <Link href="/get-started" className="block py-2 hover:bg-blue-700 px-2 rounded transition" onClick={() => setIsOpen(false)}>
-              Get Started
-            </Link>
-            <Link href="/contact" className="block py-2 hover:bg-blue-700 px-2 rounded transition" onClick={() => setIsOpen(false)}>
-              Contact
-            </Link>
             {user ? (
               <>
                 <Link href="/dashboard" className="block py-2 hover:bg-blue-700 px-2 rounded transition" onClick={() => setIsOpen(false)}>
                   Dashboard
+                </Link>
+                <Link href="/journal" className="block py-2 hover:bg-blue-700 px-2 rounded transition" onClick={() => setIsOpen(false)}>
+                  Journal
+                </Link>
+                <Link href="/chat" className="block py-2 hover:bg-blue-700 px-2 rounded transition" onClick={() => setIsOpen(false)}>
+                  AI Chat
+                </Link>
+                <Link href="/mood" className="block py-2 hover:bg-blue-700 px-2 rounded transition" onClick={() => setIsOpen(false)}>
+                  Mood Tracker
                 </Link>
                 <div className="py-2 px-2 text-sm text-blue-200">Hi, {user.fullName}</div>
                 <button
@@ -111,6 +126,18 @@ export default function Navbar() {
               </>
             ) : (
               <>
+                <Link href="/" className="block py-2 hover:bg-blue-700 px-2 rounded transition" onClick={() => setIsOpen(false)}>
+                  Home
+                </Link>
+                <Link href="/about" className="block py-2 hover:bg-blue-700 px-2 rounded transition" onClick={() => setIsOpen(false)}>
+                  About
+                </Link>
+                <Link href="/get-started" className="block py-2 hover:bg-blue-700 px-2 rounded transition" onClick={() => setIsOpen(false)}>
+                  Get Started
+                </Link>
+                <Link href="/contact" className="block py-2 hover:bg-blue-700 px-2 rounded transition" onClick={() => setIsOpen(false)}>
+                  Contact
+                </Link>
                 <Link href="/login" className="block py-2 hover:bg-blue-700 px-2 rounded transition" onClick={() => setIsOpen(false)}>
                   Login
                 </Link>
