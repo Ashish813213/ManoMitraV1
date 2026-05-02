@@ -22,12 +22,30 @@ const analyzeSentiment = async (text) => {
     }
 
     const data = await response.json();
-    return data; // { sentimentScore, emotionLabel, keywords }
+    
+    // Extract sentiment data
+    const sentimentScore = data.sentiment?.sentiment_score || 0;
+    const emotionLabel = data.emotion?.emotion || 'neutral';
+    const moodRank = data.mood_rank || 5;
+    const moodLabel = data.mood_label || 'okay';
+    const tag = data.tag || emotionLabel;
+    
+    return {
+      sentimentScore,
+      emotionLabel,
+      moodRank,
+      moodLabel,
+      tags: [tag],
+      keywords: data.emotion?.keywords || [],
+    };
   } catch (error) {
     console.error('Error analyzing sentiment:', error);
     return {
       sentimentScore: 0,
       emotionLabel: 'neutral',
+      moodRank: 5,
+      moodLabel: 'okay',
+      tags: [],
       keywords: [],
     };
   }

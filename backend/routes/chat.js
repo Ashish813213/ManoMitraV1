@@ -99,30 +99,62 @@ router.get('/conversations/:conversationId', verifyToken, async (req, res, next)
  * POST /api/chat/messages
  * Body: { conversationId, message: string, emotion?: string }
  */
+// Valid emotion labels from the model
+const VALID_EMOTIONS = ['sad', 'happy', 'angry', 'anxious', 'calm', 'neutral', 'excited', 'confused', 'hopeful'];
+
+function normalizeEmotion(emotion) {
+  if (!emotion) return 'neutral';
+  if (typeof emotion !== 'string') return 'neutral';
+  // Handle object like {emotion: 'sad', confidence: 0.8, method: 'model'}
+  if (typeof emotion === 'object') {
+    emotion = emotion.emotion || emotion.label;
+  }
+  if (!emotion || typeof emotion !== 'string') return 'neutral';
+  const lower = emotion.toLowerCase();
+  return VALID_EMOTIONS.includes(lower) ? lower : 'neutral';
+}
+
 router.post('/messages', verifyToken, async (req, res, next) => {
   try {
+    console.log('Received /chat/messages request:', { body: req.body, userId: req.user.userId });
+    
     const { conversationId, message, emotion } = req.body;
 
-    if (!conversationId || !message) {
+    if (!conversationId) {
+      console.error('Missing conversationId');
       return res.status(400).json({
         success: false,
-        message: 'conversationId and message are required',
+        message: 'conversationId is required',
       });
     }
 
-    // Verify conversation exists and belongs to user
+    if (!message) {
+      console.error('Missing message');
+      return res.status(400).json({
+        success: false,
+        message: 'message is required',
+      });
+    }
+
+    console.log('Looking for conversation:', conversationId);
+
+    // Verify conversation exists and belongs to the user
     const conversation = await AIConversation.findById(conversationId);
     if (!conversation) {
+      console.error('Conversation not found:', conversationId);
       return res.status(404).json({ success: false, message: 'Conversation not found' });
     }
 
+    console.log('Found conversation:', conversation._id, 'userId:', conversation.userId.toString());
+
     if (conversation.userId.toString() !== req.user.userId) {
+      console.error('Unauthorized - conversation userId:', conversation.userId.toString(), 'request userId:', req.user.userId);
       return res.status(403).json({ success: false, message: 'Unauthorized' });
     }
 
     // Analyze sentiment and emotion using GenerationChat
     let analysisData = {
-      emotion: emotion || 'neutral',
+      emotion: 'neutral',
       sentiment: { sentiment_score: 0 },
     };
     
@@ -136,42 +168,90 @@ router.post('/messages', verifyToken, async (req, res, next) => {
     } catch (error) {
       console.error('Error analyzing message:', error.message);
     }
-
+    
+    // Extract sentiment score - handle both object and number formats
+    let sentimentScore = 0;
+    if (analysisData.sentiment) {
+      if (typeof analysisData.sentiment === 'object') {
+        sentimentScore = analysisData.sentiment.sentiment_score ?? analysisData.sentiment.compound ?? 0;
+      } else if (typeof analysisData.sentiment === 'number') {
+        sentimentScore = analysisData.sentiment;
+      }
+    }
+    
+    // Normalize emotion to valid enum values
+    const userEmotion = normalizeEmotion(analysisData.emotion || emotion || 'neutral');
+    const aiEmotion = normalizeEmotion(analysisData.emotion || 'neutral');
+    
     // Add user message to conversation
     conversation.messages.push({
       role: 'user',
       content: message,
-      emotionLabel: analysisData.emotion || emotion || 'neutral',
-      sentimentScore: analysisData.sentiment?.sentiment_score || 0,
+      emotionLabel: userEmotion,
+      sentimentScore: sentimentScore,
       timestamp: new Date(),
     });
 
     // Get AI response from GenerationChat
-    let aiResponse = 'I appreciate you sharing that. How are you feeling about this?';
+    let aiResponse = null;
+    let aiError = null;
+    
     try {
+      console.log(`Calling GenerationChat at ${GENERATION_CHAT_URL}/chat with message:`, message.substring(0, 50));
+      
       const chatResponse = await axios.post(`${GENERATION_CHAT_URL}/chat`, {
-        message,
+        user_message: message,
         emotion: analysisData.emotion || emotion || 'neutral',
         conversation_id: conversationId,
-      });
-      if (chatResponse.data.response) {
+        user_id: req.user.userId,
+      }, { timeout: 30000 });
+      
+      console.log('GenerationChat response:', JSON.stringify(chatResponse.data).substring(0, 200));
+      
+      if (chatResponse.data.ai_message) {
+        aiResponse = chatResponse.data.ai_message;
+      } else if (chatResponse.data.response) {
         aiResponse = chatResponse.data.response;
+      } else if (chatResponse.data.success === false) {
+        aiError = chatResponse.data.error || 'Unknown error from GenerationChat';
+        console.error('GenerationChat error:', aiError);
+      } else {
+        aiError = 'Invalid response format from GenerationChat';
+        console.error('Invalid response from GenerationChat:', chatResponse.data);
       }
     } catch (error) {
-      console.error('Error getting AI response:', error.message);
+      aiError = `GenerationChat service error: ${error.message}`;
+      console.error('Error getting AI response from GenerationChat:', error.message);
+      if (error.response) {
+        console.error('Response status:', error.response.status);
+        console.error('Response data:', error.response.data);
+      } else if (error.request) {
+        console.error('No response received - GenerationChat service may not be running');
+        aiError = 'NLP service is not running. Please start the GenerationChat service on port 5001.';
+      }
+    }
+    
+    // If AI response failed, return error to user
+    if (!aiResponse) {
+      return res.status(503).json({
+        success: false,
+        message: aiError || 'Failed to get AI response',
+        error: 'NLP_SERVICE_ERROR',
+        hint: 'Make sure the Python GenerationChat service is running on port 5001'
+      });
     }
 
     // Add AI message to conversation
     conversation.messages.push({
       role: 'ai',
       content: aiResponse,
-      emotionLabel: analysisData.emotion || 'neutral',
-      sentimentScore: analysisData.sentiment?.sentiment_score || 0,
+      emotionLabel: aiEmotion,
+      sentimentScore: sentimentScore,
       timestamp: new Date(),
     });
 
     // Update conversation metadata
-    conversation.overallSessionMood = analysisData.emotion || 'neutral';
+    conversation.overallSessionMood = aiEmotion;
     conversation.totalMessages = conversation.messages.length;
 
     // Check for safety alerts
@@ -181,7 +261,18 @@ router.post('/messages', verifyToken, async (req, res, next) => {
     }
 
     conversation.updatedAt = new Date();
-    await conversation.save();
+    
+    try {
+      await conversation.save();
+      console.log('Conversation saved successfully, total messages:', conversation.messages.length);
+    } catch (saveError) {
+      console.error('Error saving conversation:', saveError.message);
+      console.error('Save error details:', saveError.errors);
+      return res.status(400).json({
+        success: false,
+        message: 'Failed to save conversation: ' + saveError.message,
+      });
+    }
 
     // Record activity
     const { UserActivity } = require('../models');
@@ -216,7 +307,10 @@ router.post('/messages', verifyToken, async (req, res, next) => {
           content: aiResponse,
           timestamp: new Date(),
         },
-        analysis: analysisData,
+        analysis: {
+          emotion: userEmotion,
+          sentiment: { sentiment_score: sentimentScore },
+        },
         safetyAlert: conversation.riskDetected ? { message: 'Safety concern detected', level: conversation.riskLevel } : null,
       },
     });

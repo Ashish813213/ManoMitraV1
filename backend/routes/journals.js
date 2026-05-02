@@ -14,14 +14,14 @@ router.post('/', verifyToken, async (req, res, next) => {
   try {
     const { title, content, moodScore, tags } = req.body;
 
-    if (!title || !content || !moodScore) {
+    if (!title || !content) {
       return res.status(400).json({
         success: false,
-        message: 'Title, content, and mood score are required',
+        message: 'Title and content are required',
       });
     }
 
-    // Analyze sentiment
+    // Analyze sentiment, emotion, mood, and tags using GenerationChat
     const sentimentData = await analyzeSentiment(content);
 
     // Check for safety concerns
@@ -31,10 +31,10 @@ router.post('/', verifyToken, async (req, res, next) => {
       userId: req.user.userId,
       title,
       content,
-      moodScore,
+      moodScore: sentimentData.moodRank || moodScore || 5,
       detectedEmotion: sentimentData.emotionLabel,
       sentimentScore: sentimentData.sentimentScore,
-      tags: tags || [],
+      tags: sentimentData.tags || tags || [],
     });
 
     await journal.save();
@@ -50,19 +50,40 @@ router.post('/', verifyToken, async (req, res, next) => {
 });
 
 /**
- * Get user's journals
- * GET /api/journals
+ * Get user's journals with optional search
+ * GET /api/journals?search=keyword&emotion=happy&tag=joyful&limit=20&skip=0&sortBy=createdAt
  */
 router.get('/', verifyToken, async (req, res, next) => {
   try {
-    const { limit = 20, skip = 0, sortBy = 'createdAt' } = req.query;
+    const { search, emotion, tag, limit = 20, skip = 0, sortBy = 'createdAt' } = req.query;
+    
+    // Build filter
+    const filter = { userId: req.user.userId };
+    
+    // Add search filter (title or content)
+    if (search) {
+      filter.$or = [
+        { title: { $regex: search, $options: 'i' } },
+        { content: { $regex: search, $options: 'i' } },
+      ];
+    }
+    
+    // Add emotion filter
+    if (emotion) {
+      filter.detectedEmotion = emotion;
+    }
+    
+    // Add tag filter
+    if (tag) {
+      filter.tags = { $in: [tag] };
+    }
 
-    const journals = await Journal.find({ userId: req.user.userId })
+    const journals = await Journal.find(filter)
       .sort({ [sortBy]: -1 })
       .limit(parseInt(limit))
       .skip(parseInt(skip));
 
-    const total = await Journal.countDocuments({ userId: req.user.userId });
+    const total = await Journal.countDocuments(filter);
 
     res.json({
       success: true,
@@ -214,6 +235,95 @@ router.get('/analytics/mood-trend', verifyToken, async (req, res, next) => {
         lowestMood: Math.min(...scores),
         highestMood: Math.max(...scores),
         journals,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * Get trends analytics
+ * GET /api/journals/analytics/trends
+ */
+router.get('/analytics/trends', verifyToken, async (req, res, next) => {
+  try {
+    const { days = 30 } = req.query;
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - parseInt(days));
+
+    const journals = await Journal.find({
+      userId: req.user.userId,
+      createdAt: { $gte: startDate },
+    }).sort({ createdAt: 1 });
+
+    if (journals.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No journals found for the period',
+        data: {
+          journalCount: 0,
+          averageMood: 0,
+          averageSentiment: 0,
+          moodTrend: [],
+          sentimentTrend: [],
+          emotionDistribution: {},
+          tagFrequency: {},
+        },
+      });
+    }
+
+    const scores = journals.map((j) => j.moodScore);
+    const sentiments = journals.map((j) => j.sentimentScore || 0);
+    const averageMood = Math.round((scores.reduce((a, b) => a + b) / scores.length) * 100) / 100;
+    const averageSentiment = Math.round((sentiments.reduce((a, b) => a + b) / sentiments.length) * 100) / 100;
+
+    const moodTrend = journals.map((j) => ({
+      date: j.createdAt,
+      mood: j.moodScore,
+      title: j.title,
+    }));
+
+    const sentimentTrend = journals.map((j) => ({
+      date: j.createdAt,
+      sentiment: j.sentimentScore || 0,
+      title: j.title,
+    }));
+
+    const emotionDistribution = {};
+    journals.forEach((j) => {
+      const emotion = j.detectedEmotion || 'neutral';
+      emotionDistribution[emotion] = (emotionDistribution[emotion] || 0) + 1;
+    });
+
+    const tagFrequency = {};
+    journals.forEach((j) => {
+      (j.tags || []).forEach((tag) => {
+        tagFrequency[tag] = (tagFrequency[tag] || 0) + 1;
+      });
+    });
+
+    const sortedTags = Object.entries(tagFrequency)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10);
+
+    const topTags = Object.fromEntries(sortedTags);
+
+    const recentEntries = journals.slice(-5).reverse();
+
+    res.json({
+      success: true,
+      data: {
+        journalCount: journals.length,
+        averageMood,
+        averageSentiment,
+        lowestMood: Math.min(...scores),
+        highestMood: Math.max(...scores),
+        moodTrend,
+        sentimentTrend,
+        emotionDistribution,
+        tagFrequency: topTags,
+        recentEntries,
       },
     });
   } catch (error) {
