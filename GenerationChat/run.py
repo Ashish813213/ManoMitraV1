@@ -79,7 +79,23 @@ def start_service(port: int = 5001, debug: bool = True):
     
     download_nltk_data()
     
-    print(f"🚀 Starting ManoMITRA NLP Service on port {port}")
+    # Test NVIDIA API connection
+    print("\nTesting NVIDIA API connection...")
+    try:
+        import test_startup
+        test_startup_result = True
+    except SystemExit:
+        print("❌ NVIDIA API test failed. Check your API key.")
+        if not debug:
+            sys.exit(1)
+        print("⚠️  Continuing in debug mode with fallback responses...")
+    except Exception as e:
+        print(f"❌ Error testing NVIDIA API: {e}")
+        if not debug:
+            sys.exit(1)
+        print("⚠️  Continuing in debug mode with fallback responses...")
+    
+    print(f"\n🚀 Starting ManoMITRA NLP Service on port {port}")
     print(f"   Debug: {'ON' if debug else 'OFF'}")
     print(f"   URL: http://localhost:{port}")
     print(f"   Health: http://localhost:{port}/health")
@@ -102,7 +118,7 @@ def start_service(port: int = 5001, debug: bool = True):
             host='0.0.0.0',
             port=port,
             debug=debug,
-            use_reloader=debug
+            use_reloader=False
         )
     except KeyboardInterrupt:
         print("\n\n🛑 Service stopped")

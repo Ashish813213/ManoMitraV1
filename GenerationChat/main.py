@@ -14,12 +14,15 @@ Features:
 import os
 import json
 import logging
+import warnings
 from datetime import datetime, timedelta
 from typing import Dict, List, Tuple, Optional
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from dotenv import load_dotenv
-import numpy as np
+
+# Suppress deprecation warnings
+warnings.filterwarnings('ignore', category=DeprecationWarning)
 
 # NLP and ML imports
 from nltk.sentiment import SentimentIntensityAnalyzer
@@ -99,8 +102,10 @@ def get_db():
     """Get MongoDB connection"""
     try:
         mongo_uri = os.getenv('MONGO_URI', 'mongodb://localhost:27017/manomitra')
-        client = MongoClient(mongo_uri)
+        client = MongoClient(mongo_uri, serverSelectionTimeoutMS=2000)
         db = client.manomitra
+        # Test connection
+        client.server_info()
         return db
     except Exception as e:
         logger.error(f"Database connection error: {e}")
@@ -294,145 +299,105 @@ class SafetyDetector:
 
 
 class ChatGenerator:
-    """AI chat generation - contextual responses"""
-    
-    # Response templates based on emotion and context
-    RESPONSE_TEMPLATES = {
-        'sad': {
-            'opening': [
-                "I'm so sorry you're feeling down. That sounds really difficult.",
-                "It's okay to feel sad sometimes. I'm here to listen.",
-                "I hear you. These feelings are valid.",
-            ],
-            'supportive': [
-                "Remember that this feeling is temporary, even if it doesn't feel that way right now.",
-                "You've overcome challenges before. You're stronger than you think.",
-                "It's okay to not be okay. What matters is that you're reaching out.",
-            ],
-            'actionable': [
-                "Would you like to try a grounding exercise to help you feel more present?",
-                "Sometimes talking to someone you trust can really help. Have you considered reaching out to a friend or therapist?",
-                "Taking a walk or doing some gentle movement might help lift your mood a bit.",
-            ]
-        },
-        'anxious': {
-            'opening': [
-                "Anxiety can feel overwhelming. I'm here to help you through this.",
-                "What you're feeling is real, and it's manageable.",
-                "Let's work through this together.",
-            ],
-            'supportive': [
-                "Remember: you've made it through 100% of your worst days so far.",
-                "Anxiety often feels bigger than it actually is. You can handle this.",
-                "Try to focus on what you can control right now, not everything.",
-            ],
-            'actionable': [
-                "Taking slow, deep breaths can help calm your nervous system. Try breathing in for 4, holding for 4, and out for 4.",
-                "Would a grounding exercise help you feel more present and less anxious?",
-                "Sometimes writing down your worries can help organize them.",
-            ]
-        },
-        'angry': {
-            'opening': [
-                "I understand you're feeling frustrated. That's valid.",
-                "Anger is often masking pain. What's really bothering you?",
-                "It's okay to feel angry. Let's talk about what triggered this.",
-            ],
-            'supportive': [
-                "Your feelings are important and deserve to be heard.",
-                "This situation is frustrating, and you have a right to feel upset.",
-                "Anger can be a sign that something important matters to you.",
-            ],
-            'actionable': [
-                "Sometimes physical activity like a workout can help release anger productively.",
-                "Writing or journaling about your feelings can help process them.",
-                "Would you like to talk about what happened?",
-            ]
-        },
-        'happy': {
-            'opening': [
-                "That's wonderful! I'm so glad you're doing well!",
-                "It's great to hear positive things from you!",
-                "Your happiness is contagious! What's going on?",
-            ],
-            'supportive': [
-                "Hold onto these good feelings - they matter.",
-                "It's beautiful to see you thriving.",
-                "Keep nurturing what's bringing you joy.",
-            ],
-            'actionable': [
-                "Would you like to journal about this positive moment?",
-                "Consider sharing this happiness with someone you care about.",
-                "Let's celebrate this with you!",
-            ]
-        },
-        'neutral': {
-            'opening': [
-                "Hello! How are you really feeling today?",
-                "I'm here if you'd like to talk about anything.",
-                "What's on your mind?",
-            ],
-            'supportive': [
-                "It's okay if you're not sure how you're feeling.",
-                "Take your time to express yourself.",
-                "I'm listening without judgment.",
-            ],
-            'actionable': [
-                "Would you like to do a wellness check-in?",
-                "How can I best support you right now?",
-                "What would help you feel better?",
-            ]
-        }
-    }
+    """AI chat generation using NVIDIA Nemotron"""
     
     @staticmethod
     def generate(user_message: str, emotion: str, sentiment_score: float, context: Optional[Dict] = None) -> Dict:
         """
-        Generate contextual AI response
+        Generate contextual AI response using NVIDIA Nemotron
         Returns: {
             'response': str,
             'suggestions': list,
             'resources': list,
-            'follow_up': str
+            'emotion_detected': str
         }
         """
+        logger.info(f"ChatGenerator called with emotion: {emotion}, sentiment: {sentiment_score}")
+        
         if not user_message or not isinstance(user_message, str):
             return {'response': 'I\'m having trouble understanding. Could you say that differently?', 'suggestions': []}
         
         try:
-            # Determine response tone based on emotion
-            emotion_key = emotion if emotion in ChatGenerator.RESPONSE_TEMPLATES else 'neutral'
-            templates = ChatGenerator.RESPONSE_TEMPLATES[emotion_key]
+            api_key = os.getenv("NVIDIA_API_KEY") or os.getenv("OPENAI_API_KEY")
+            logger.info(f"NVIDIA_API_KEY present: {bool(api_key)}")
             
-            # Select opening response
-            opening = np.random.choice(templates['opening'])
+            if not api_key:
+                logger.warning("Neither NVIDIA_API_KEY nor OPENAI_API_KEY found, using fallback response")
+                return {
+                    'response': "I'm here to listen. Tell me more about what you're experiencing.",
+                    'suggestions': ChatGenerator._generate_suggestions(emotion, sentiment_score),
+                    'resources': ChatGenerator._get_resources(emotion),
+                    'emotion_detected': emotion
+                }
             
-            # Add supportive message
-            supportive = np.random.choice(templates['supportive'])
+            # Set OPENAI_API_KEY for the library
+            os.environ['OPENAI_API_KEY'] = api_key
             
-            # Add actionable suggestion
-            actionable = np.random.choice(templates['actionable'])
+            from openai import OpenAI
             
-            # Combine response
-            response = f"{opening}\n\n{supportive}\n\n{actionable}"
+            from openai import OpenAI
             
-            # Generate suggestions based on context
-            suggestions = ChatGenerator._generate_suggestions(emotion, sentiment_score)
+            client = OpenAI(
+                base_url="https://integrate.api.nvidia.com/v1",
+                api_key=api_key
+            )
+            model = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning"
             
-            # Resources
-            resources = ChatGenerator._get_resources(emotion)
+            logger.info(f"Calling NVIDIA API with model: {model}")
+            
+            system_prompt = f"""You are ManoMITRA, a compassionate mental health support assistant.
+User's detected emotion: {emotion}
+Sentiment score: {sentiment_score} (range: -1 to 1)
+
+Your approach:
+1. Validate their feelings and experiences
+2. Show genuine empathy and understanding
+3. Ask clarifying questions to better understand
+4. Offer practical coping strategies when appropriate
+5. Encourage professional help when needed
+6. Never diagnose or prescribe medications
+7. Prioritize user safety and crisis resources
+
+Tone: Warm, supportive, non-judgmental, professional.
+Keep responses concise (2-4 sentences)."""
+
+            completion = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_message}
+                ],
+                temperature=0.7,
+                top_p=0.95,
+                max_tokens=1024,
+                extra_body={
+                    "chat_template_kwargs": {"enable_thinking": False}
+                }
+            )
+            
+            # Get response - handle None content
+            response = completion.choices[0].message.content
+            reasoning = completion.choices[0].message.reasoning if hasattr(completion.choices[0].message, 'reasoning') else ''
+            
+            # If no content, use reasoning as fallback
+            if not response and reasoning:
+                response = reasoning[:500]
+            
+            logger.info(f"NVIDIA API response received: {response[:100] if response else 'None'}...")
             
             return {
                 'response': response,
-                'suggestions': suggestions,
-                'resources': resources,
+                'suggestions': ChatGenerator._generate_suggestions(emotion, sentiment_score),
+                'resources': ChatGenerator._get_resources(emotion),
                 'emotion_detected': emotion
             }
         except Exception as e:
-            logger.error(f"Chat generation error: {e}")
+            logger.error(f"ChatGenerator error: {str(e)}")
             return {
                 'response': "I'm here to listen. Tell me more about what you're experiencing.",
-                'suggestions': []
+                'suggestions': ChatGenerator._generate_suggestions(emotion, sentiment_score),
+                'resources': ChatGenerator._get_resources(emotion),
+                'emotion_detected': emotion
             }
     
     @staticmethod
@@ -530,9 +495,23 @@ def api_docs():
 @app.route('/health', methods=['GET'])
 def health():
     """Health check endpoint"""
+    nvidia_status = "unavailable"
+    if os.getenv("NVIDIA_API_KEY"):
+        try:
+            from openai import OpenAI
+            client = OpenAI(
+                base_url="https://integrate.api.nvidia.com/v1",
+                api_key=os.getenv("NVIDIA_API_KEY")
+            )
+            client.models.list()
+            nvidia_status = "available"
+        except Exception as e:
+            nvidia_status = f"error: {str(e)[:100]}"
+    
     return jsonify({
         'status': 'healthy',
         'service': 'ManoMITRA NLP Service',
+        'nvidia_api': nvidia_status,
         'timestamp': datetime.now().isoformat()
     }), 200
 
@@ -570,16 +549,42 @@ def analyze_text():
         # Safety Detection
         safety_result = SafetyDetector.detect(text) if include_safety else {}
         
+        # Generate mood rank (1-10) based on sentiment score and emotion
+        sentiment_score = sentiment_result.get('sentiment_score', 0)
+        emotion = emotion_result.get('emotion', 'neutral')
+        
+        # Map sentiment score (-1 to 1) to mood rank (1-10)
+        mood_rank = max(1, min(10, int((sentiment_score + 1) * 5)))
+        
+        # Mood labels based on rank
+        mood_labels = {
+            1: 'terrible', 2: 'awful', 3: 'bad', 4: 'poor',
+            5: 'okay', 6: 'alright', 7: 'good', 8: 'great',
+            9: 'excellent', 10: 'amazing'
+        }
+        mood_label = mood_labels.get(mood_rank, 'okay')
+        
+        # Generate single-word tag based on emotion and sentiment
+        emotion_to_tag = {
+            'happy': 'joyful', 'sad': 'sorrowful', 'angry': 'frustrated',
+            'anxious': 'worried', 'calm': 'peaceful', 'neutral': 'balanced',
+            'excited': 'energetic', 'confused': 'uncertain', 'hopeful': 'optimistic'
+        }
+        tag = emotion_to_tag.get(emotion, emotion)
+        
         response = {
             'success': True,
             'text_length': len(text),
             'sentiment': sentiment_result,
             'emotion': emotion_result,
             'safety': safety_result,
+            'mood_rank': mood_rank,
+            'mood_label': mood_label,
+            'tag': tag,
             'timestamp': datetime.now().isoformat()
         }
         
-        logger.info(f"Analysis complete - Sentiment: {sentiment_result['sentiment_label']}, Emotion: {emotion_result.get('emotion', 'N/A')}")
+        logger.info(f"Analysis complete - Sentiment: {sentiment_result['sentiment_label']}, Emotion: {emotion}, Mood: {mood_rank}/10 ({mood_label}), Tag: {tag}")
         
         return jsonify(response), 200
         
@@ -622,6 +627,7 @@ def chat():
         
         # Generate response using NVIDIA API or fallback
         if use_nvidia and nvidia_chatbot:
+            logger.info(f"Using nvidia_chatbot for response generation. Emotion: {emotion['emotion']}")
             try:
                 ai_response_result = nvidia_chatbot.generate_response(
                     user_message=user_message,
@@ -632,10 +638,12 @@ def chat():
                     ai_response = {
                         'response': ai_response_result['response'],
                         'reasoning': ai_response_result.get('reasoning', ''),
-                        'suggestions': [],  # NVIDIA model generates contextual suggestions in response
+                        'suggestions': [],
                         'resources': []
                     }
+                    logger.info(f"NVIDIA chatbot response generated successfully")
                 else:
+                    logger.warning(f"NVIDIA chatbot returned unsuccessful result: {ai_response_result}")
                     # Fallback to local generation
                     ai_response = ChatGenerator.generate(
                         user_message,
@@ -643,6 +651,7 @@ def chat():
                         sentiment['sentiment_score']
                     )
             except Exception as e:
+                logger.error(f"NVIDIA API error: {e}")
                 logger.warning(f"NVIDIA API error, using fallback: {e}")
                 ai_response = ChatGenerator.generate(
                     user_message,
@@ -650,48 +659,25 @@ def chat():
                     sentiment['sentiment_score']
                 )
         else:
+            logger.info(f"Using ChatGenerator fallback. use_nvidia={use_nvidia}, nvidia_chatbot={nvidia_chatbot is not None}")
             # Use fallback local generation
             ai_response = ChatGenerator.generate(
                 user_message,
                 emotion['emotion'],
                 sentiment['sentiment_score']
             )
+
+        # Store conversation (if user_id provided) - disabled for now to avoid db issues
+        # if user_id is not None:
+        #     db = get_db()
+        #     if db is not None:
+        #         try:
+        #             db.ai_conversations.update_one(...)
         
-        # Store conversation (if user_id provided)
-        if user_id:
-            db = get_db()
-            if db:
-                try:
-                    db.ai_conversations.update_one(
-                        {'_id': conversation_id or user_id},
-                        {
-                            '$push': {
-                                'messages': [
-                                    {
-                                        'role': 'user',
-                                        'content': user_message,
-                                        'sentiment_score': sentiment['sentiment_score'],
-                                        'emotion_label': emotion['emotion'],
-                                        'timestamp': datetime.now()
-                                    },
-                                    {
-                                        'role': 'ai',
-                                        'content': ai_response['response'],
-                                        'model': 'nvidia-nemotron' if use_nvidia else 'local-fallback',
-                                        'reasoning': ai_response.get('reasoning', ''),
-                                        'timestamp': datetime.now()
-                                    }
-                                ]
-                            },
-                            '$set': {
-                                'overall_session_mood': emotion['emotion'],
-                                'risk_detected': safety['risk_level'] in ['high', 'critical']
-                            }
-                        },
-                        upsert=True
-                    )
-                except Exception as e:
-                    logger.warning(f"Could not store conversation: {e}")
+        # Build safety_details properly
+        safety_details = None
+        if safety.get('risk_level', 'low') != 'low':
+            safety_details = safety
         
         response = {
             'success': True,
@@ -706,7 +692,7 @@ def chat():
                 'emotion_confidence': emotion['confidence']
             },
             'safety_alert': safety['risk_level'] in ['high', 'critical'],
-            'safety_details': safety if safety['risk_level'] != 'low' else None,
+            'safety_details': safety_details,
             'model_used': 'nvidia-nemotron' if use_nvidia else 'local-fallback',
             'timestamp': datetime.now().isoformat()
         }
