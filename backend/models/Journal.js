@@ -44,6 +44,13 @@ const journalSchema = new mongoose.Schema(
     triggers: [String],
     coping: [String],
     gratitude: [String],
+    attachments: [
+      {
+        url: String,
+        filename: String,
+        mimeType: String,
+      },
+    ],
   },
   {
     timestamps: true,

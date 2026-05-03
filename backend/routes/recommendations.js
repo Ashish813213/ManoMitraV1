@@ -122,6 +122,24 @@ router.get('/resource/:id', async (req, res, next) => {
 });
 
 /**
+ * Generate personalized recommendations based on user behavior
+ * POST /api/recommendations/generate
+ */
+router.post('/generate', verifyToken, async (req, res, next) => {
+  try {
+    const userId = req.user.userId || req.user.id;
+    await generatePersonalizedRecommendations(userId);
+    const recs = await Recommendation.find({ userId, isDismissed: false })
+      .populate('resourceId')
+      .sort({ score: -1 })
+      .limit(10);
+    res.json({ success: true, message: 'Recommendations refreshed', recommendations: recs, count: recs.length });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * Mark Resource as Completed
  * POST /api/recommendations/:id/complete
  */
@@ -281,6 +299,95 @@ async function generateRecommendations(userId, userMood, completedResourceIds) {
     }
   } catch (error) {
     console.error('Error generating recommendations:', error);
+  }
+}
+
+/**
+ * Personalized Recommendations Algorithm based on user behavior
+ */
+async function generatePersonalizedRecommendations(userId) {
+  try {
+    // Gather user data
+    const [recentMoods, recentJournals, completedRecs] = await Promise.all([
+      MoodHistory.find({ userId }).sort({ date: -1 }).limit(14),
+      Journal.find({ userId }).sort({ createdAt: -1 }).limit(7),
+      Recommendation.find({ userId, completed: true }).select('resourceId'),
+    ]);
+
+    const completedResourceIds = completedRecs.map((r) => r.resourceId);
+
+    // Determine dominant emotion / mood trend
+    const avgMoodScore = recentMoods.length
+      ? recentMoods.reduce((s, m) => s + m.moodScore, 0) / recentMoods.length
+      : 5;
+
+    const emotionCount = {};
+    recentMoods.forEach((m) => { emotionCount[m.emotion] = (emotionCount[m.emotion] || 0) + 1; });
+    const dominantEmotion = Object.entries(emotionCount).sort((a, b) => b[1] - a[1])[0]?.[0] || 'neutral';
+
+    // Average journal sentiment
+    const avgJournalSentiment = recentJournals.length
+      ? recentJournals.reduce((s, j) => s + (j.sentimentScore || 0), 0) / recentJournals.length
+      : 0;
+
+    // Determine category priorities based on user data
+    const categoryWeights = {
+      anxiety: 0,
+      depression: 0,
+      stress_management: 0,
+      sleep: 0,
+      mindfulness: 0,
+      general: 10,
+    };
+
+    if (dominantEmotion === 'anxious') categoryWeights.anxiety += 30;
+    if (dominantEmotion === 'sad') categoryWeights.depression += 30;
+    if (dominantEmotion === 'angry') categoryWeights.stress_management += 30;
+    if (avgMoodScore < 4) { categoryWeights.depression += 20; categoryWeights.mindfulness += 15; }
+    if (avgMoodScore >= 4 && avgMoodScore < 6) { categoryWeights.stress_management += 15; categoryWeights.mindfulness += 20; }
+    if (avgJournalSentiment < -0.3) { categoryWeights.mindfulness += 15; categoryWeights.depression += 10; }
+
+    const topCategories = Object.entries(categoryWeights)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([cat]) => cat);
+
+    // Fetch resources for top categories
+    const resources = await Resource.find({
+      isPublished: true,
+      _id: { $nin: completedResourceIds },
+      category: { $in: topCategories },
+    })
+      .sort({ rating: -1, views: -1 })
+      .limit(8)
+      .select('_id category');
+
+    // Also fetch emotion-matched resources
+    const emotionResources = await Resource.find({
+      isPublished: true,
+      _id: { $nin: completedResourceIds },
+      targetEmotions: dominantEmotion,
+    })
+      .limit(4)
+      .select('_id');
+
+    const allResourceIds = [
+      ...new Set([...emotionResources.map((r) => r._id.toString()), ...resources.map((r) => r._id.toString())]),
+    ].slice(0, 10);
+
+    for (const resourceId of allResourceIds) {
+      const existing = await Recommendation.findOne({ userId, resourceId });
+      if (!existing) {
+        const isEmotionMatch = emotionResources.some((r) => r._id.toString() === resourceId.toString());
+        const isCategoryMatch = resources.some((r) => r._id.toString() === resourceId.toString());
+        const reason = isEmotionMatch ? 'emotion_based' : isCategoryMatch ? 'personalized_algorithm' : 'trending';
+        const score = isEmotionMatch ? 90 : isCategoryMatch ? 75 : 60;
+
+        await Recommendation.create({ userId, resourceId, reason, score });
+      }
+    }
+  } catch (error) {
+    console.error('Error generating personalized recommendations:', error);
   }
 }
 

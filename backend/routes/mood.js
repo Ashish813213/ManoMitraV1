@@ -135,6 +135,173 @@ router.get('/recent', verifyToken, async (req, res, next) => {
   }
 });
 
+/**
+ * Get Mood Analytics
+ * GET /api/mood/analytics?days=30
+ */
+router.get('/analytics', verifyToken, async (req, res, next) => {
+  try {
+    const days = parseInt(req.query.days) || 30;
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+
+    const entries = await MoodHistory.find({
+      userId: req.user.userId,
+      date: { $gte: startDate },
+    }).sort({ date: 1 });
+
+    if (entries.length === 0) {
+      return res.json({
+        success: true,
+        data: {
+          totalEntries: 0,
+          averageMoodScore: 0,
+          weeklyAverage: 0,
+          monthlyAverage: 0,
+          bestDay: null,
+          worstDay: null,
+          currentStreak: 0,
+          emotionDistribution: {},
+          dailyTrend: [],
+          weeklyTrend: [],
+          insights: [],
+        },
+      });
+    }
+
+    // Averages
+    const totalEntries = entries.length;
+    const averageMoodScore = entries.reduce((sum, e) => sum + e.moodScore, 0) / totalEntries;
+
+    // Weekly average (last 7 days)
+    const weekStart = new Date();
+    weekStart.setDate(weekStart.getDate() - 7);
+    const weekEntries = entries.filter((e) => e.date >= weekStart);
+    const weeklyAverage = weekEntries.length
+      ? weekEntries.reduce((sum, e) => sum + e.moodScore, 0) / weekEntries.length
+      : averageMoodScore;
+
+    // Monthly average (last 30 days)
+    const monthlyAverage = averageMoodScore;
+
+    // Best and worst days
+    const sorted = [...entries].sort((a, b) => b.moodScore - a.moodScore);
+    const bestDay = sorted[0] ? { date: sorted[0].date, score: sorted[0].moodScore, emotion: sorted[0].emotion } : null;
+    const worstDay = sorted[sorted.length - 1] ? { date: sorted[sorted.length - 1].date, score: sorted[sorted.length - 1].moodScore, emotion: sorted[sorted.length - 1].emotion } : null;
+
+    // Current streak (consecutive days with at least one entry)
+    let currentStreak = 0;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    for (let i = 0; i < 365; i++) {
+      const day = new Date(today);
+      day.setDate(today.getDate() - i);
+      const dayEnd = new Date(day);
+      dayEnd.setHours(23, 59, 59, 999);
+      const hasEntry = entries.some((e) => e.date >= day && e.date <= dayEnd);
+      if (hasEntry) {
+        currentStreak++;
+      } else if (i > 0) {
+        break;
+      }
+    }
+
+    // Emotion distribution
+    const emotionDistribution = {};
+    entries.forEach((e) => {
+      emotionDistribution[e.emotion] = (emotionDistribution[e.emotion] || 0) + 1;
+    });
+
+    // Daily trend (group by date, average score per day)
+    const dailyMap = {};
+    entries.forEach((e) => {
+      const dateKey = new Date(e.date).toISOString().split('T')[0];
+      if (!dailyMap[dateKey]) dailyMap[dateKey] = [];
+      dailyMap[dateKey].push(e.moodScore);
+    });
+    const dailyTrend = Object.entries(dailyMap)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, scores]) => ({
+        date,
+        averageScore: scores.reduce((s, v) => s + v, 0) / scores.length,
+        entryCount: scores.length,
+      }));
+
+    // Weekly trend (group by ISO week)
+    const weeklyMap = {};
+    entries.forEach((e) => {
+      const d = new Date(e.date);
+      const weekNum = getISOWeek(d);
+      const key = `${d.getFullYear()}-W${weekNum}`;
+      if (!weeklyMap[key]) weeklyMap[key] = [];
+      weeklyMap[key].push(e.moodScore);
+    });
+    const weeklyTrend = Object.entries(weeklyMap)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([week, scores]) => ({
+        week,
+        averageScore: scores.reduce((s, v) => s + v, 0) / scores.length,
+        entryCount: scores.length,
+      }));
+
+    // Generate text insights
+    const insights = generateMoodInsights(averageMoodScore, currentStreak, emotionDistribution, weeklyAverage);
+
+    res.json({
+      success: true,
+      data: {
+        totalEntries,
+        averageMoodScore: parseFloat(averageMoodScore.toFixed(2)),
+        weeklyAverage: parseFloat(weeklyAverage.toFixed(2)),
+        monthlyAverage: parseFloat(monthlyAverage.toFixed(2)),
+        bestDay,
+        worstDay,
+        currentStreak,
+        emotionDistribution,
+        dailyTrend,
+        weeklyTrend,
+        insights,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+function getISOWeek(date) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + 4 - (d.getDay() || 7));
+  const yearStart = new Date(d.getFullYear(), 0, 1);
+  return Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
+}
+
+function generateMoodInsights(avg, streak, dist, weeklyAvg) {
+  const insights = [];
+  if (avg >= 7) insights.push({ type: 'positive', text: 'Your average mood is great! Keep up the positive habits.' });
+  else if (avg >= 5) insights.push({ type: 'neutral', text: 'Your mood is stable. Small daily practices can boost it further.' });
+  else insights.push({ type: 'concern', text: 'Your mood has been lower lately. Consider reaching out to a therapist or trying breathing exercises.' });
+
+  if (streak >= 7) insights.push({ type: 'positive', text: `🔥 You're on a ${streak}-day streak! Consistency is key to mental wellness.` });
+  else if (streak >= 3) insights.push({ type: 'positive', text: `Good job! ${streak} days in a row of mood tracking.` });
+  else insights.push({ type: 'tip', text: 'Try to check in daily. Consistent tracking reveals important patterns.' });
+
+  const topEmotion = Object.entries(dist).sort((a, b) => b[1] - a[1])[0];
+  if (topEmotion) {
+    const [emotion] = topEmotion;
+    if (['anxious', 'sad', 'angry'].includes(emotion)) {
+      insights.push({ type: 'tip', text: `You've been feeling ${emotion} frequently. Breathing exercises and journaling can help.` });
+    } else if (['calm', 'happy', 'hopeful'].includes(emotion)) {
+      insights.push({ type: 'positive', text: `${emotion.charAt(0).toUpperCase() + emotion.slice(1)} is your most common emotion — that's a great sign!` });
+    }
+  }
+
+  if (weeklyAvg > avg + 0.5) insights.push({ type: 'positive', text: 'Your mood this week is trending upward! 📈' });
+  else if (weeklyAvg < avg - 0.5) insights.push({ type: 'concern', text: 'Your mood this week is slightly lower than average. Be gentle with yourself.' });
+
+  return insights;
+}
+
 function generateInsight(emotion, moodScore, sentimentScore) {
   const insights = {
     happy: [

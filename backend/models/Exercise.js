@@ -30,6 +30,17 @@ const exerciseSchema = new mongoose.Schema(
     instructions: [String],
     benefits: [String],
     targetAudience: [String],
+    steps: [
+      {
+        instruction: String,
+        durationSeconds: Number,
+        phase: {
+          type: String,
+          enum: ['inhale', 'hold', 'exhale', 'rest', 'guidance'],
+          default: 'guidance',
+        },
+      },
+    ],
     category: {
       type: String,
       enum: ['stress', 'anxiety', 'sleep', 'focus', 'energy', 'emotions', 'social'],

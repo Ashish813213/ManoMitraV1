@@ -45,6 +45,12 @@ const sessionSchema = new mongoose.Schema(
       enum: ['user', 'therapist', 'system'],
     },
     cancellationReason: String,
+    paymentStatus: {
+      type: String,
+      enum: ['pending', 'paid', 'refunded', 'free'],
+      default: 'pending',
+    },
+    paymentIntentId: String,
   },
   {
     timestamps: true,

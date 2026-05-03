@@ -1,6 +1,8 @@
 const express = require('express');
+const path = require('path');
 const { User } = require('../models');
 const { verifyToken } = require('../middleware/auth');
+const { avatarUpload } = require('../middleware/upload');
 
 const router = express.Router();
 
@@ -53,6 +55,27 @@ router.put('/profile', verifyToken, async (req, res, next) => {
       message: 'Profile updated successfully',
       user,
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * Upload avatar image
+ * POST /api/users/avatar
+ */
+router.post('/avatar', verifyToken, avatarUpload.single('avatar'), async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'No file uploaded' });
+    }
+
+    const BASE_URL = process.env.BASE_URL || 'http://localhost:5000';
+    const avatarUrl = `${BASE_URL}/uploads/avatars/${req.file.filename}`;
+
+    await User.findByIdAndUpdate(req.user.userId, { 'profile.avatar': avatarUrl });
+
+    res.json({ success: true, avatarUrl });
   } catch (error) {
     next(error);
   }
