@@ -50,7 +50,7 @@ router.get('/conversations', verifyToken, async (req, res, next) => {
   try {
     const conversations = await AIConversation.find({ userId: req.user.userId })
       .sort({ updatedAt: -1 })
-      .select('_id title createdAt updatedAt');
+      .select('_id title createdAt updatedAt sessionSentimentScore sessionEmotionLabel overallSessionMood sessionSummary');
 
     res.json({
       success: true,
@@ -192,6 +192,12 @@ router.post('/messages', verifyToken, async (req, res, next) => {
       timestamp: new Date(),
     });
 
+    // Build compact conversation history for GenerationChat context.
+    const conversationHistory = conversation.messages.slice(-12).map((msg) => ({
+      role: msg.role === 'ai' ? 'assistant' : 'user',
+      content: msg.content,
+    }));
+
     // Get AI response from GenerationChat
     let aiResponse = null;
     let aiError = null;
@@ -204,6 +210,7 @@ router.post('/messages', verifyToken, async (req, res, next) => {
         emotion: analysisData.emotion || emotion || 'neutral',
         conversation_id: conversationId,
         user_id: req.user.userId,
+        conversation_history: conversationHistory,
       }, { timeout: 30000 });
       
       console.log('GenerationChat response:', JSON.stringify(chatResponse.data).substring(0, 200));
@@ -312,6 +319,66 @@ router.post('/messages', verifyToken, async (req, res, next) => {
           sentiment: { sentiment_score: sentimentScore },
         },
         safetyAlert: conversation.riskDetected ? { message: 'Safety concern detected', level: conversation.riskLevel } : null,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * Close a conversation and store a session summary
+ * POST /api/chat/conversations/:conversationId/close
+ */
+router.post('/conversations/:conversationId/close', verifyToken, async (req, res, next) => {
+  try {
+    const conversation = await AIConversation.findById(req.params.conversationId);
+
+    if (!conversation) {
+      return res.status(404).json({ success: false, message: 'Conversation not found' });
+    }
+
+    if (conversation.userId.toString() !== req.user.userId) {
+      return res.status(403).json({ success: false, message: 'Unauthorized' });
+    }
+
+    const userMessages = conversation.messages.filter((message) => message.role === 'user');
+    const scores = userMessages
+      .map((message) => typeof message.sentimentScore === 'number' ? message.sentimentScore : null)
+      .filter((score) => score !== null);
+
+    const averageScore = scores.length
+      ? scores.reduce((total, score) => total + score, 0) / scores.length
+      : 0;
+
+    let sessionEmotionLabel = 'neutral';
+    if (averageScore >= 0.35) {
+      sessionEmotionLabel = 'happy';
+    } else if (averageScore >= 0.1) {
+      sessionEmotionLabel = 'calm';
+    } else if (averageScore <= -0.35) {
+      sessionEmotionLabel = 'sad';
+    } else if (averageScore <= -0.15) {
+      sessionEmotionLabel = 'anxious';
+    }
+
+    conversation.sessionSentimentScore = Number(averageScore.toFixed(3));
+    conversation.sessionEmotionLabel = sessionEmotionLabel;
+    conversation.overallSessionMood = sessionEmotionLabel;
+
+    const messageCount = conversation.messages.length;
+    conversation.sessionSummary = `Closed chat with ${messageCount} messages. Final session mood: ${sessionEmotionLabel}. Sentiment score: ${conversation.sessionSentimentScore.toFixed(3)}.`;
+    conversation.updatedAt = new Date();
+
+    await conversation.save();
+
+    return res.json({
+      success: true,
+      message: 'Conversation closed',
+      summary: {
+        sentimentScore: conversation.sessionSentimentScore,
+        emotion: sessionEmotionLabel,
+        sessionSummary: conversation.sessionSummary,
       },
     });
   } catch (error) {

@@ -35,6 +35,15 @@ const aiConversationSchema = new mongoose.Schema(
       },
     ],
     overallSessionMood: String,
+    sessionSentimentScore: {
+      type: Number,
+      min: -1,
+      max: 1,
+    },
+    sessionEmotionLabel: {
+      type: String,
+      enum: ['sad', 'happy', 'angry', 'anxious', 'calm', 'neutral', 'excited', 'confused', 'hopeful'],
+    },
     riskDetected: {
       type: Boolean,
       default: false,
