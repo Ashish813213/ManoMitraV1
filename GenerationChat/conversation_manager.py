@@ -7,6 +7,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 from pymongo import MongoClient
+from bson import ObjectId
 import os
 
 logger = logging.getLogger(__name__)
@@ -63,7 +64,7 @@ class ConversationManager:
             }
             
             result = self.collection.update_one(
-                {'_id': conversation_id},
+                {'_id': ObjectId(conversation_id)},
                 {
                     '$push': {'messages': message},
                     '$set': {'updated_at': datetime.now()}
@@ -81,7 +82,7 @@ class ConversationManager:
             return None
         
         try:
-            return self.collection.find_one({'_id': conversation_id})
+            return self.collection.find_one({'_id': ObjectId(conversation_id)})
         except Exception as e:
             logger.error(f"Error retrieving conversation: {e}")
             return None
@@ -149,7 +150,7 @@ class ConversationManager:
         
         try:
             result = self.collection.update_one(
-                {'_id': conversation_id},
+                {'_id': ObjectId(conversation_id)},
                 {
                     '$set': {
                         'overall_session_mood': mood,
@@ -169,7 +170,7 @@ class ConversationManager:
             return False
         
         try:
-            result = self.collection.delete_one({'_id': conversation_id})
+            result = self.collection.delete_one({'_id': ObjectId(conversation_id)})
             return result.deleted_count > 0
         except Exception as e:
             logger.error(f"Error deleting conversation: {e}")

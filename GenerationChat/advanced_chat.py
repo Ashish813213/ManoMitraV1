@@ -7,6 +7,7 @@ import os
 import logging
 from typing import Dict, List, Optional, Generator
 from datetime import datetime
+import httpx
 from openai import OpenAI
 
 logger = logging.getLogger(__name__)
@@ -21,31 +22,30 @@ class NvidiaAdvancedChatBot:
         if not api_key:
             raise ValueError("Neither NVIDIA_API_KEY nor OPENAI_API_KEY found in environment variables")
         
-        # Set OPENAI_API_KEY for the library
-        os.environ['OPENAI_API_KEY'] = api_key
-        
         self.client = OpenAI(
             base_url="https://integrate.api.nvidia.com/v1",
+            api_key=api_key,
+            http_client=httpx.Client(),
         )
         
         self.model = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning"
         self.conversation_history = []
         
         # Context for mental health support
-        self.system_prompt = """You are ManoMITRA, a compassionate mental health support assistant. 
-You provide empathetic, thoughtful responses to users sharing their mental health concerns.
+        self.system_prompt = """You are ManoMITRA, a mental health support companion. You talk like a caring, grounded friend — not a therapist reading from a script.
 
-Your approach:
-1. Validate their feelings and experiences
-2. Show genuine empathy and understanding
-3. Ask clarifying questions to better understand
-4. Offer practical coping strategies when appropriate
-5. Encourage professional help when needed
-6. Never diagnose or prescribe medications
-7. Prioritize user safety and crisis resources
-
-Tone: Warm, supportive, non-judgmental, professional.
-Always maintain confidentiality and respect boundaries."""
+CRITICAL RULES — follow every one of these without exception:
+- Respond in plain, natural prose. Never use bullet points, numbered lists, or headers.
+- Write 2–3 sentences maximum unless the user is in clear distress and needs more support.
+- NEVER use hollow affirmations like "I'm so sorry you feel that way", "That's completely understandable", "You're not alone", "I'm here for you", or "It's okay to feel that way." These are clichés that feel fake.
+- Ask AT MOST one follow-up question per reply. Never ask multiple questions in one message.
+- Match the user's energy. If they say "I'm happy" or "celebrate" — be warm and light. Do not pivot to therapy mode.
+- If someone asks a factual question (who are you, can you code, etc.) — answer it directly and briefly. Don't force emotional support onto non-emotional messages.
+- Never repeat phrases from earlier in the same response.
+- If someone is frustrated or stressed, acknowledge the specific thing they mentioned — don't give generic comfort.
+- IMPORTANT: If the user asks HOW to support someone else (e.g., "how do I help my friend", "how to console them", "what to say to someone", "how to be there for..."), immediately pivot to giving PRACTICAL ACTIONABLE ADVICE with specific examples. Do NOT assume the user is the one in distress. Give concrete, doable things they can say or do. Example: "Instead of saying 'everything will be fine,' try saying 'I'm here with you' and just listen without trying to fix things."
+- Only suggest professional help if the user shows sustained distress across the conversation, not on a first mention of a hard feeling.
+- Adapt your tone fully to the emotion. Calm = reflective. Happy = warm and light. Stressed = grounded and practical. Sad = gentle. Angry = steady, not coddling."""
 
     def generate_response(self, user_message: str, emotion: str = None) -> Dict:
         """
@@ -59,13 +59,36 @@ Always maintain confidentiality and respect boundaries."""
             Dict with response, thinking process, and metadata
         """
         try:
-            # Build conversation context
-            context_message = f"User emotion detected: {emotion}\n" if emotion else ""
-            full_message = f"{context_message}User: {user_message}"
-            
+            # Pass emotion as system-level context, not embedded in user message
+            messages_to_send = [{"role": "system", "content": self.system_prompt}]
+
+            if emotion:
+                # Inject emotion as a brief system note, not into the user turn
+                messages_to_send.append({
+                    "role": "system",
+                    "content": f"[Context: user's detected emotion is '{emotion}'. Use this internally to calibrate tone — do not mention it explicitly in your reply.]"
+                })
+
+            # Normalize and append prior turns first.
+            for msg in self.conversation_history:
+                role = msg.get("role", "user")
+                if role == "ai":
+                    role = "assistant"
+                elif role not in ["user", "assistant", "system"]:
+                    role = "user"
+                content = msg.get("content", "")
+                if content:
+                    messages_to_send.append({"role": role, "content": content})
+
+            # Add current user turn to both outbound request and stored history.
+            messages_to_send.append({
+                "role": "user",
+                "content": user_message
+            })
+
             self.conversation_history.append({
                 "role": "user",
-                "content": full_message
+                "content": user_message
             })
             
             # Call NVIDIA API with streaming
@@ -74,10 +97,7 @@ Always maintain confidentiality and respect boundaries."""
             
             completion = self.client.chat.completions.create(
                 model=self.model,
-                messages=[
-                    {"role": "system", "content": self.system_prompt},
-                    *self.conversation_history
-                ],
+                messages=messages_to_send,
                 temperature=0.7,
                 top_p=0.95,
                 max_tokens=2048,
@@ -116,26 +136,6 @@ Always maintain confidentiality and respect boundaries."""
             return {
                 "success": True,
                 "response": full_response,
-                "reasoning": reasoning_content,
-                "timestamp": datetime.now().isoformat(),
-                "model": self.model,
-                "emotion_context": emotion
-            }
-            
-            # If no content was generated, use reasoning as fallback
-            if not full_response and reasoning_content:
-                full_response = reasoning_content[:500]  # First 500 chars of reasoning
-            
-            # Store full response in history
-            if full_response:
-                self.conversation_history.append({
-                    "role": "assistant",
-                    "content": full_response
-                })
-            
-            return {
-                "success": True,
-                "response": response_content,
                 "reasoning": reasoning_content,
                 "timestamp": datetime.now().isoformat(),
                 "model": self.model,
@@ -261,25 +261,26 @@ class ContextualChatBot:
         
         self.client = OpenAI(
             base_url="https://integrate.api.nvidia.com/v1",
-            api_key=api_key
+            api_key=api_key,
+            http_client=httpx.Client(),
         )
         self.model = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning"
         self.conversation_history = []
-        
-        self.system_prompt = """You are ManoMITRA, a compassionate mental health support assistant. 
-You provide empathetic, thoughtful responses to users sharing their mental health concerns.
 
-Your approach:
-1. Validate their feelings and experiences
-2. Show genuine empathy and understanding
-3. Ask clarifying questions to better understand
-4. Offer practical coping strategies when appropriate
-5. Encourage professional help when needed
-6. Never diagnose or prescribe medications
-7. Prioritize user safety and crisis resources
+        self.system_prompt = """You are ManoMITRA, a mental health support companion. You talk like a caring, grounded friend — not a therapist reading from a script.
 
-Tone: Warm, supportive, non-judgmental, professional.
-Always maintain confidentiality and respect boundaries."""
+CRITICAL RULES — follow every one of these without exception:
+- Respond in plain, natural prose. Never use bullet points, numbered lists, or headers.
+- Write 2–3 sentences maximum unless the user is in clear distress and needs more support.
+- NEVER use hollow affirmations like "I'm so sorry you feel that way", "That's completely understandable", "You're not alone", "I'm here for you", or "It's okay to feel that way." These are clichés that feel fake.
+- Ask AT MOST one follow-up question per reply. Never ask multiple questions in one message.
+- Match the user's energy. If they say "I'm happy" or "celebrate" — be warm and light. Do not pivot to therapy mode.
+- If someone asks a factual question (who are you, can you code, etc.) — answer it directly and briefly. Don't force emotional support onto non-emotional messages.
+- Never repeat phrases from earlier in the same response.
+- If someone is frustrated or stressed, acknowledge the specific thing they mentioned — don't give generic comfort.
+- IMPORTANT: If the user asks HOW to support someone else (e.g., "how do I help my friend", "how to console them", "what to say to someone", "how to be there for..."), immediately pivot to giving PRACTICAL ACTIONABLE ADVICE with specific examples. Do NOT assume the user is the one in distress. Give concrete, doable things they can say or do. Example: "Instead of saying 'everything will be fine,' try saying 'I'm here with you' and just listen without trying to fix things."
+- Only suggest professional help if the user shows sustained distress across the conversation, not on a first mention of a hard feeling.
+- Adapt your tone fully to the emotion. Calm = reflective. Happy = warm and light. Stressed = grounded and practical. Sad = gentle. Angry = steady, not coddling."""
 
     @staticmethod
     def generate_response(
@@ -307,31 +308,41 @@ Always maintain confidentiality and respect boundaries."""
             
             client = OpenAI(
                 base_url="https://integrate.api.nvidia.com/v1",
-                api_key=api_key
+                api_key=api_key,
+                http_client=httpx.Client(),
             )
             model = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning"
-            
-            system_prompt = f"""You are ManoMITRA, a compassionate mental health support assistant.
-The user's detected emotion is: {emotion}
-The sentiment score is: {sentiment_score} (range: -1 to 1, where negative is negative sentiment)
 
-Your approach:
-1. Validate their feelings and experiences
-2. Show genuine empathy and understanding
-3. Ask clarifying questions to better understand
-4. Offer practical coping strategies when appropriate
-5. Encourage professional help when needed
-6. Never diagnose or prescribe medications
-7. Prioritize user safety and crisis resources
+            system_prompt = """You are ManoMITRA, a mental health support companion. You talk like a caring, grounded friend — not a therapist reading from a script.
 
-Tone: Warm, supportive, non-judgmental, professional.
-Keep responses concise (2-4 sentences). Always maintain confidentiality and respect boundaries."""
+CRITICAL RULES — follow every one of these without exception:
+- Respond in plain, natural prose. Never use bullet points, numbered lists, or headers.
+- Write 2–3 sentences maximum unless the user is in clear distress and needs more support.
+- NEVER use hollow affirmations like "I'm so sorry you feel that way", "That's completely understandable", "You're not alone", "I'm here for you", or "It's okay to feel that way." These are clichés that feel fake.
+- Ask AT MOST one follow-up question per reply. Never ask multiple questions in one message.
+- Match the user's energy. If they say "I'm happy" or "celebrate" — be warm and light. Do not pivot to therapy mode.
+- If someone asks a factual question (who are you, can you code, etc.) — answer it directly and briefly. Don't force emotional support onto non-emotional messages.
+- Never repeat phrases from earlier in the same response.
+- If someone is frustrated or stressed, acknowledge the specific thing they mentioned — don't give generic comfort.
+- Only suggest professional help if the user shows sustained distress across the conversation, not on a first mention of a hard feeling.
+- Adapt your tone fully to the emotion. Calm = reflective. Happy = warm and light. Stressed = grounded and practical. Sad = gentle. Angry = steady, not coddling."""
 
             messages = [{"role": "system", "content": system_prompt}]
+
+            if emotion:
+                messages.append({
+                    "role": "system",
+                    "content": f"[Context: user's detected emotion is '{emotion}', sentiment score {sentiment_score:.2f}. Use this to calibrate tone only — do not mention these values.]"
+                })
             
+            # conversation_history is now List[Dict] with 'role' and 'content'
             if conversation_history:
-                for msg in conversation_history[-6:]:
-                    messages.append({"role": "user", "content": msg})
+                for msg in conversation_history[-8:]:
+                    if isinstance(msg, dict) and 'role' in msg and 'content' in msg:
+                        messages.append({"role": msg['role'], "content": msg['content']})
+                    elif isinstance(msg, str):
+                        # Legacy fallback: plain strings treated as user turns
+                        messages.append({"role": "user", "content": msg})
             
             messages.append({"role": "user", "content": user_message})
             
@@ -340,17 +351,14 @@ Keep responses concise (2-4 sentences). Always maintain confidentiality and resp
                 messages=messages,
                 temperature=0.7,
                 top_p=0.95,
-                max_tokens=1024,
+                max_tokens=512,
                 extra_body={
-                    "chat_template_kwargs": {"enable_thinking": True},
-                    "reasoning_budget": 4096
+                    "chat_template_kwargs": {"enable_thinking": False}
                 }
             )
             
-            response_content = completion.choices[0].message.content
-            
+            response_content = completion.choices[0].message.content or ""
             wellness_suggestions = ContextualChatBot._generate_suggestions(emotion, sentiment_score)
-            follow_ups = ContextualChatBot._generate_follow_ups(emotion)
             
             return {
                 'response': response_content,
@@ -358,20 +366,18 @@ Keep responses concise (2-4 sentences). Always maintain confidentiality and resp
                 'emotion': emotion,
                 'sentiment_score': sentiment_score,
                 'timestamp': datetime.now().isoformat(),
-                'follow_up_questions': follow_ups,
                 'model': 'nvidia-nemotron'
             }
             
         except Exception as e:
             logger.error(f"Error generating contextual response: {str(e)}")
             return {
-                'response': "I'm here to listen and support you. Please tell me more about what you're experiencing.",
+                'response': None,
                 'suggestions': ContextualChatBot._generate_suggestions(emotion, sentiment_score),
                 'emotion': emotion,
                 'sentiment_score': sentiment_score,
                 'timestamp': datetime.now().isoformat(),
-                'follow_up_questions': ContextualChatBot._generate_follow_ups(emotion),
-                'model': 'fallback',
+                'model': 'error',
                 'error': str(e)
             }
 

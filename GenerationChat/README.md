@@ -53,7 +53,6 @@ The entry point exposing all service endpoints:
 - Dependency verification and environment setup
 - Automatic NLTK data downloading
 - Server startup with configurable options
-- Test suite execution
 
 ### Data Flow
 
@@ -360,12 +359,10 @@ This service is part of the ManoMITRA Mental Health Platform. Special thanks to:
 - Mental health professionals whose expertise informed the safety protocols and response templates
 
 ## Support
-
 For issues, questions, or contributions related to this service:
 1. Check existing documentation in this README
 2. Review source code comments for implementation details
-3. Refer to the test suite (`test_nlp_service.py`) for usage examples
-4. Contact the ManoMITRA development team for platform-specific inquiries
+3. Contact the ManoMITRA development team for platform-specific inquiries
 
 ---
 

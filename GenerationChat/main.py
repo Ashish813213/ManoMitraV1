@@ -315,75 +315,81 @@ class ChatGenerator:
         logger.info(f"ChatGenerator called with emotion: {emotion}, sentiment: {sentiment_score}")
         
         if not user_message or not isinstance(user_message, str):
-            return {'response': 'I\'m having trouble understanding. Could you say that differently?', 'suggestions': []}
+            return {'response': None, 'suggestions': [], 'error': 'Empty message provided'}
+        
+        conversation_history = context.get('conversation_history', []) if context else []
         
         try:
             api_key = os.getenv("NVIDIA_API_KEY") or os.getenv("OPENAI_API_KEY")
             logger.info(f"NVIDIA_API_KEY present: {bool(api_key)}")
             
             if not api_key:
-                logger.warning("Neither NVIDIA_API_KEY nor OPENAI_API_KEY found, using fallback response")
-                return {
-                    'response': "I'm here to listen. Tell me more about what you're experiencing.",
-                    'suggestions': ChatGenerator._generate_suggestions(emotion, sentiment_score),
-                    'resources': ChatGenerator._get_resources(emotion),
-                    'emotion_detected': emotion
-                }
-            
-            # Set OPENAI_API_KEY for the library
-            os.environ['OPENAI_API_KEY'] = api_key
+                logger.error("NVIDIA_API_KEY not found")
+                return {'response': None, 'suggestions': [], 'error': 'API key not configured'}
             
             from openai import OpenAI
-            
-            from openai import OpenAI
+            import httpx
             
             client = OpenAI(
                 base_url="https://integrate.api.nvidia.com/v1",
-                api_key=api_key
+                api_key=api_key,
+                http_client=httpx.Client(),
             )
             model = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning"
             
             logger.info(f"Calling NVIDIA API with model: {model}")
             
-            system_prompt = f"""You are ManoMITRA, a compassionate mental health support assistant.
-User's detected emotion: {emotion}
-Sentiment score: {sentiment_score} (range: -1 to 1)
+            system_prompt = """You are ManoMITRA, a mental health support companion. You talk like a caring, grounded friend — not a therapist reading from a script.
 
-Your approach:
-1. Validate their feelings and experiences
-2. Show genuine empathy and understanding
-3. Ask clarifying questions to better understand
-4. Offer practical coping strategies when appropriate
-5. Encourage professional help when needed
-6. Never diagnose or prescribe medications
-7. Prioritize user safety and crisis resources
+CRITICAL RULES — follow every one of these without exception:
+- Respond in plain, natural prose. Never use bullet points, numbered lists, or headers.
+- Write 2–3 sentences maximum unless the user is in clear distress and needs more support.
+- NEVER use hollow affirmations like "I'm so sorry you feel that way", "That's completely understandable", "You're not alone", "I'm here for you", or "It's okay to feel that way." These are clichés that feel fake.
+- Ask AT MOST one follow-up question per reply. Never ask multiple questions in one message.
+- Match the user's energy. If they say "I'm happy" or "celebrate" — be warm and light. Do not pivot to therapy mode.
+- If someone asks a factual question (who are you, can you code, etc.) — answer it directly and briefly. Don't force emotional support onto non-emotional messages.
+- Never repeat phrases from earlier in the same response.
+- If someone is frustrated or stressed, acknowledge the specific thing they mentioned — don't give generic comfort.
+- IMPORTANT: If the user asks HOW to support someone else (e.g., "how do I help my friend", "how to console them", "what to say to someone", "how to be there for..."), immediately pivot to giving PRACTICAL ACTIONABLE ADVICE with specific examples. Do NOT assume the user is the one in distress. Give concrete, doable things they can say or do. Example: "Instead of saying 'everything will be fine,' try saying 'I'm here with you' and just listen without trying to fix things."
+- Only suggest professional help if the user shows sustained distress across the conversation, not on a first mention of a hard feeling.
+- Adapt your tone fully to the emotion. Calm = reflective. Happy = warm and light. Stressed = grounded and practical. Sad = gentle. Angry = steady, not coddling."""
 
-Tone: Warm, supportive, non-judgmental, professional.
-Keep responses concise (2-4 sentences)."""
-
+            messages = [{"role": "system", "content": system_prompt}]
+            
+            if emotion:
+                messages.append({
+                    "role": "system",
+                    "content": f"[Context: user's detected emotion is '{emotion}', sentiment {sentiment_score:.2f}. Use this to calibrate tone — do not mention these values in your response.]"
+                })
+            
+            for msg in conversation_history[-8:]:
+                if isinstance(msg, dict) and 'role' in msg and 'content' in msg:
+                    messages.append({"role": msg['role'], "content": msg['content']})
+            
+            messages.append({"role": "user", "content": user_message})
+            
             completion = client.chat.completions.create(
                 model=model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_message}
-                ],
+                messages=messages,
                 temperature=0.7,
                 top_p=0.95,
-                max_tokens=1024,
+                max_tokens=512,
                 extra_body={
                     "chat_template_kwargs": {"enable_thinking": False}
                 }
             )
             
-            # Get response - handle None content
             response = completion.choices[0].message.content
             reasoning = completion.choices[0].message.reasoning if hasattr(completion.choices[0].message, 'reasoning') else ''
             
-            # If no content, use reasoning as fallback
             if not response and reasoning:
                 response = reasoning[:500]
             
-            logger.info(f"NVIDIA API response received: {response[:100] if response else 'None'}...")
+            if not response:
+                logger.error("NVIDIA API returned empty response")
+                return {'response': None, 'suggestions': [], 'error': 'Empty response from AI'}
+            
+            logger.info(f"NVIDIA API response received: {response[:100]}...")
             
             return {
                 'response': response,
@@ -393,12 +399,7 @@ Keep responses concise (2-4 sentences)."""
             }
         except Exception as e:
             logger.error(f"ChatGenerator error: {str(e)}")
-            return {
-                'response': "I'm here to listen. Tell me more about what you're experiencing.",
-                'suggestions': ChatGenerator._generate_suggestions(emotion, sentiment_score),
-                'resources': ChatGenerator._get_resources(emotion),
-                'emotion_detected': emotion
-            }
+            return {'response': None, 'suggestions': [], 'error': str(e)}
     
     @staticmethod
     def _generate_suggestions(emotion: str, sentiment_score: float) -> List[str]:
@@ -498,10 +499,12 @@ def health():
     nvidia_status = "unavailable"
     if os.getenv("NVIDIA_API_KEY"):
         try:
+            import httpx
             from openai import OpenAI
             client = OpenAI(
                 base_url="https://integrate.api.nvidia.com/v1",
-                api_key=os.getenv("NVIDIA_API_KEY")
+                api_key=os.getenv("NVIDIA_API_KEY"),
+                http_client=httpx.Client(),
             )
             client.models.list()
             nvidia_status = "available"
@@ -619,6 +622,8 @@ def chat():
         user_message = data['user_message'].strip()
         user_id = data.get('user_id')
         conversation_id = data.get('conversation_id')
+        # conversation_history: List of {role, content} dicts from the frontend
+        conversation_history = data.get('conversation_history', [])
         
         # Analyze user message
         sentiment = SentimentAnalyzer.analyze(user_message)
@@ -629,6 +634,20 @@ def chat():
         if use_nvidia and nvidia_chatbot:
             logger.info(f"Using nvidia_chatbot for response generation. Emotion: {emotion['emotion']}")
             try:
+                # Rebuild conversation history into the chatbot's internal state
+                # so it has full per-conversation context and never leaks across users.
+                rebuilt_history = []
+                for msg in conversation_history:
+                    if not isinstance(msg, dict) or 'role' not in msg or 'content' not in msg:
+                        continue
+                    role = msg['role']
+                    if role == 'ai':
+                        role = 'assistant'
+                    elif role not in ['user', 'assistant', 'system']:
+                        role = 'user'
+                    rebuilt_history.append({"role": role, "content": msg['content']})
+                nvidia_chatbot.conversation_history = rebuilt_history
+
                 ai_response_result = nvidia_chatbot.generate_response(
                     user_message=user_message,
                     emotion=emotion['emotion']
@@ -638,33 +657,32 @@ def chat():
                     ai_response = {
                         'response': ai_response_result['response'],
                         'reasoning': ai_response_result.get('reasoning', ''),
-                        'suggestions': [],
-                        'resources': []
+                        'suggestions': ChatGenerator._generate_suggestions(emotion['emotion'], sentiment['sentiment_score']),
+                        'resources': ChatGenerator._get_resources(emotion['emotion'])
                     }
-                    logger.info(f"NVIDIA chatbot response generated successfully")
                 else:
                     logger.warning(f"NVIDIA chatbot returned unsuccessful result: {ai_response_result}")
-                    # Fallback to local generation
                     ai_response = ChatGenerator.generate(
                         user_message,
                         emotion['emotion'],
-                        sentiment['sentiment_score']
+                        sentiment['sentiment_score'],
+                        {'conversation_history': conversation_history}
                     )
             except Exception as e:
                 logger.error(f"NVIDIA API error: {e}")
-                logger.warning(f"NVIDIA API error, using fallback: {e}")
                 ai_response = ChatGenerator.generate(
                     user_message,
                     emotion['emotion'],
-                    sentiment['sentiment_score']
+                    sentiment['sentiment_score'],
+                    {'conversation_history': conversation_history}
                 )
         else:
-            logger.info(f"Using ChatGenerator fallback. use_nvidia={use_nvidia}, nvidia_chatbot={nvidia_chatbot is not None}")
-            # Use fallback local generation
+            logger.info(f"Using ChatGenerator. use_nvidia={use_nvidia}, nvidia_chatbot={nvidia_chatbot is not None}")
             ai_response = ChatGenerator.generate(
                 user_message,
                 emotion['emotion'],
-                sentiment['sentiment_score']
+                sentiment['sentiment_score'],
+                {'conversation_history': conversation_history}
             )
 
         # Store conversation (if user_id provided) - disabled for now to avoid db issues
@@ -678,6 +696,13 @@ def chat():
         safety_details = None
         if safety.get('risk_level', 'low') != 'low':
             safety_details = safety
+        
+        if not ai_response.get('response'):
+            logger.error(f"Failed to generate AI response: {ai_response.get('error', 'Unknown error')}")
+            return jsonify({
+                'success': False,
+                'error': ai_response.get('error', 'Failed to generate response')
+            }), 500
         
         response = {
             'success': True,
