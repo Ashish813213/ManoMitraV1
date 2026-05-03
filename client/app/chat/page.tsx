@@ -8,6 +8,7 @@ import {
   createConversation,
   getConversations,
   getConversation,
+  closeConversation,
   sendMessage,
   deleteConversation,
   type ChatConversation,
@@ -73,14 +74,6 @@ export default function ChatPage() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [analyzingEmotion, setAnalyzingEmotion] = useState<string | null>(null);
-  const [lastAnalysis, setLastAnalysis] = useState<{
-    emotion: string;
-    sentiment: number;
-    sentimentLabel: string;
-    reasoning: string;
-    suggestions: string[];
-  } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -194,21 +187,6 @@ export default function ChatPage() {
         ];
       });
 
-      // Store analysis data for display
-      if (res.data.analysis) {
-        setLastAnalysis({
-          emotion: res.data.analysis.emotion || 'neutral',
-          sentiment: res.data.analysis.sentiment?.sentiment_score || 0,
-          sentimentLabel: res.data.analysis.sentiment_label || 'Neutral',
-          reasoning: res.data.reasoning || '',
-          suggestions: res.data.suggestions || [],
-        });
-      }
-
-      if (res.data.analysis?.emotion) {
-        setAnalyzingEmotion(res.data.analysis.emotion);
-        setTimeout(() => setAnalyzingEmotion(null), 3000);
-      }
     } catch (err: unknown) {
       console.error('Send message error:', err);
       setError(err instanceof Error ? err.message : 'Failed to send message');
@@ -217,6 +195,23 @@ export default function ChatPage() {
       setSending(false);
     }
   }, [input, activeConversation, sending]);
+
+  const handleCloseConversation = async () => {
+    if (!activeConversation) return;
+
+    try {
+      setSending(true);
+      await closeConversation(activeConversation);
+      await loadConversations();
+      setActiveConversation(null);
+      setMessages([]);
+      setSidebarOpen(true);
+    } catch {
+      setError('Failed to close conversation');
+    } finally {
+      setSending(false);
+    }
+  };
 
   const handleDeleteConversation = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -296,6 +291,11 @@ export default function ChatPage() {
                     <div className="flex-1 min-w-0">
                       <h3 className="text-sm font-semibold text-slate-900 truncate">{conv.title}</h3>
                       <p className="text-xs text-slate-500 mt-1">{formatDate(conv.createdAt || conv.updatedAt)}</p>
+                      {typeof conv.sessionSentimentScore === 'number' && (
+                        <p className="text-xs text-slate-500 mt-1">
+                          Saved score: {conv.sessionSentimentScore.toFixed(3)} {conv.sessionEmotionLabel ? `(${conv.sessionEmotionLabel})` : ''}
+                        </p>
+                      )}
                     </div>
                     <button
                       onClick={(e) => handleDeleteConversation(conv._id, e)}
@@ -356,16 +356,19 @@ export default function ChatPage() {
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                {lastAnalysis && (
-                  <div className={`rounded-full px-3 py-1.5 text-xs font-semibold ${EMOTION_COLORS[lastAnalysis.emotion] || EMOTION_COLORS.neutral}`}>
-                    {EMOTION_EMOJIS[lastAnalysis.emotion] || '😐'} {lastAnalysis.emotion}
-                  </div>
-                )}
-                {analyzingEmotion && (
-                  <div className={`rounded-full px-3 py-1.5 text-xs font-semibold ${EMOTION_COLORS[analyzingEmotion] || EMOTION_COLORS.neutral}`}>
-                    {EMOTION_EMOJIS[analyzingEmotion] || '😐'} Detected: {analyzingEmotion}
-                  </div>
-                )}
+                <button
+                  onClick={handleCloseConversation}
+                  disabled={sending}
+                  className="rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-700 disabled:opacity-50"
+                >
+                  Close Chat
+                </button>
+                <button
+                  onClick={handleCreateConversation}
+                  className="rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white transition hover:bg-slate-800"
+                >
+                  New Chat
+                </button>
               </div>
             </header>
 
@@ -442,57 +445,6 @@ export default function ChatPage() {
                 <div className="mx-6 mb-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-medium text-amber-800 flex items-center justify-between">
                   {error}
                   <button onClick={() => setError(null)} className="ml-2 font-bold underline">Dismiss</button>
-                </div>
-              )}
-
-              {/* Analysis Panel */}
-              {lastAnalysis && (
-                <div className="mx-6 mb-2 p-4 bg-white rounded-xl border border-slate-200 shadow-sm">
-                  <h3 className="text-sm font-bold text-slate-900 mb-2">📊 Analysis Results</h3>
-                  
-                  {/* Sentiment Bar */}
-                  <div className="mb-3">
-                    <p className="text-xs text-slate-500 mb-1">Sentiment Score: {lastAnalysis.sentiment.toFixed(3)} ({lastAnalysis.sentimentLabel})</p>
-                    <div className="flex gap-1 h-5 rounded overflow-hidden">
-                      <div 
-                        className="bg-green-500" 
-                        style={{ width: `${Math.max(0, lastAnalysis.sentiment) * 100}%` }}
-                        title="Positive"
-                      />
-                      <div 
-                        className="bg-gray-400" 
-                        style={{ width: `${Math.abs(lastAnalysis.sentiment) < 0.05 ? 100 : 0}%` }}
-                        title="Neutral"
-                      />
-                      <div 
-                        className="bg-red-500" 
-                        style={{ width: `${Math.max(0, -lastAnalysis.sentiment) * 100}%` }}
-                        title="Negative"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Emotion Badge */}
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className={`rounded-full px-2 py-1 text-xs font-medium ${
-                      EMOTION_COLORS[lastAnalysis.emotion] || EMOTION_COLORS.neutral
-                    }`}>
-                      {EMOTION_EMOJIS[lastAnalysis.emotion] || '😐'} {lastAnalysis.emotion}
-                    </span>
-                    <span className="text-xs text-slate-500">Confidence: {lastAnalysis.confidence ? (lastAnalysis.confidence * 100).toFixed(1) + '%' : 'N/A'}</span>
-                  </div>
-
-                  {/* Suggestions */}
-                  {lastAnalysis.suggestions && lastAnalysis.suggestions.length > 0 && (
-                    <div className="mt-3">
-                      <p className="text-xs font-semibold text-slate-700 mb-1">💡 Wellness Suggestions:</p>
-                      {lastAnalysis.suggestions.map((suggestion, idx) => (
-                        <div key={idx} className="text-xs p-2 bg-blue-50 rounded border-l-2 border-blue-400 mt-1">
-                          {suggestion}
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
               )}
 

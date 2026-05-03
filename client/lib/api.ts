@@ -234,6 +234,10 @@ export type ChatConversation = {
   createdAt: string;
   updatedAt: string;
   lastMessage?: string;
+  sessionSentimentScore?: number;
+  sessionEmotionLabel?: string;
+  overallSessionMood?: string;
+  sessionSummary?: string;
 };
 
 export type ChatMessage = {
@@ -285,6 +289,16 @@ export async function sendMessage(conversationId: string, message: string, emoti
 
 export async function deleteConversation(conversationId: string): Promise<{ success: boolean; message: string }> {
   return apiFetch(`/chat/conversations/${conversationId}`, { method: 'DELETE' });
+}
+
+export async function closeConversation(conversationId: string): Promise<{
+  success: boolean;
+  message: string;
+  summary?: { sentimentScore: number; emotion: string; sessionSummary: string };
+}> {
+  return apiFetch(`/chat/conversations/${conversationId}/close`, {
+    method: 'POST',
+  });
 }
 
 // Exercise types
