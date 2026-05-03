@@ -219,6 +219,7 @@ const SAMPLE_DATA = {
       isPublic: true,
       allowAnonymousPosts: true,
       tags: ['anxiety', 'support', 'mental-health'],
+      totalMembers: 156,
       posts: [
         {
           userName: 'MindfulJourney',
@@ -246,6 +247,7 @@ const SAMPLE_DATA = {
       isPublic: true,
       allowAnonymousPosts: true,
       tags: ['sleep', 'wellness', 'rest'],
+      totalMembers: 89,
       posts: [
         {
           userName: 'RestfulNights',
@@ -266,6 +268,7 @@ const SAMPLE_DATA = {
       isPublic: true,
       allowAnonymousPosts: false,
       tags: ['stress', 'management', 'wellness'],
+      totalMembers: 67,
       posts: [],
     },
     {
@@ -278,6 +281,7 @@ const SAMPLE_DATA = {
       isPublic: true,
       allowAnonymousPosts: true,
       tags: ['depression', 'support', 'recovery'],
+      totalMembers: 112,
       posts: [],
     },
   ],

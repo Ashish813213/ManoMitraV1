@@ -16,6 +16,22 @@ const exerciseSchema = new mongoose.Schema(
       enum: ['breathing', 'meditation', 'grounding', 'yoga', 'mindfulness', 'journaling', 'visualization', 'progressive-relaxation'],
       required: true,
     },
+    contentType: {
+      type: String,
+      enum: ['breathing', 'meditation', 'movement', 'journaling'],
+      default: 'movement',
+    },
+    steps: [
+      {
+        instruction: String,
+        durationSeconds: {
+          type: Number,
+          default: 30,
+        },
+        audioUrl: String,
+        imageUrl: String,
+      },
+    ],
     difficulty: {
       type: String,
       enum: ['easy', 'medium', 'hard'],
@@ -38,7 +54,6 @@ const exerciseSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
-    difficulty: String,
   },
   {
     timestamps: true,

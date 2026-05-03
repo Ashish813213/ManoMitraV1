@@ -17,4 +17,5 @@ module.exports = {
   Workshop: require('./Workshop'),
   Community: require('./Community'),
   UserActivity: require('./UserActivity'),
+  Notification: require('./Notification'),
 };

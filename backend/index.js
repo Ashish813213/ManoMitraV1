@@ -2,6 +2,8 @@ const express = require('express');
 const mongoose = require('mongoose');
 require('dotenv').config();
 const cors = require('cors');
+const http = require('http');
+const { Server } = require('socket.io');
 
 // Middleware imports
 const requestLogger = require('./middleware/requestLogger');
@@ -20,8 +22,53 @@ const resourcesRoutes = require('./routes/resources');
 const communityRoutes = require('./routes/community');
 const chatRoutes = require('./routes/chat');
 const therapistsRoutes = require('./routes/therapists');
+const sessionsRoutes = require('./routes/sessions');
+const notificationsRoutes = require('./routes/notifications');
 
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST'],
+  },
+});
+
+// Store io instance for use in routes
+app.set('io', io);
+
+// Socket.io connection handling
+io.on('connection', (socket) => {
+  console.log('Client connected:', socket.id);
+
+  socket.on('join-user', (userId) => {
+    socket.join(`user:${userId}`);
+    console.log(`User ${userId} joined their room`);
+  });
+
+  socket.on('join-community', (communityId) => {
+    socket.join(`community:${communityId}`);
+  });
+
+  socket.on('leave-community', (communityId) => {
+    socket.leave(`community:${communityId}`);
+  });
+
+  socket.on('send-community-message', (data) => {
+    const { communityId, message, userName } = data;
+    io.to(`community:${communityId}`).emit('community-message', {
+      message,
+      userName,
+      timestamp: new Date(),
+    });
+  });
+
+  socket.on('disconnect', () => {
+    console.log('Client disconnected:', socket.id);
+  });
+});
+
+// Middleware
 
 // Middleware
 app.use(express.json());
@@ -48,6 +95,8 @@ app.use('/api/resources', resourcesRoutes);
 app.use('/api/community', communityRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/therapists', therapistsRoutes);
+app.use('/api/sessions', sessionsRoutes);
+app.use('/api/notifications', notificationsRoutes);
 
 // Health check endpoint
 app.get('/', (req, res) => {

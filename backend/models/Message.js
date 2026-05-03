@@ -5,13 +5,21 @@ const messageSchema = new mongoose.Schema(
     chatRoomId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'ChatRoom',
-      required: true,
+    },
+    communityId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Community',
     },
     senderId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       required: true,
     },
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+    },
+    userName: String,
     messageType: {
       type: String,
       enum: ['text', 'image', 'system', 'file'],
@@ -42,6 +50,16 @@ const messageSchema = new mongoose.Schema(
       default: false,
     },
     flagReason: String,
+    isReported: {
+      type: Boolean,
+      default: false,
+    },
+    reportReason: String,
+    reportedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+    },
+    reportedAt: Date,
     isEdited: {
       type: Boolean,
       default: false,
@@ -61,14 +79,23 @@ const messageSchema = new mongoose.Schema(
         },
       },
     ],
+    parentMessageId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Message',
+    },
+    replyCount: {
+      type: Number,
+      default: 0,
+    },
   },
   {
     timestamps: true,
     indexes: [
       { chatRoomId: 1, createdAt: -1 },
+      { communityId: 1, createdAt: -1 },
       { senderId: 1, createdAt: -1 },
       { isFlagged: 1 },
-      { emailLabel: 1 },
+      { isReported: 1 },
     ],
   }
 );

@@ -419,3 +419,143 @@ router.post('/', verifyToken, async (req, res, next) => {
 });
 
 module.exports = router;
+
+/**
+ * Get community messages (paginated)
+ * GET /api/community/:id/messages?limit=50&before=timestamp
+ */
+router.get('/:id/messages', verifyToken, async (req, res, next) => {
+  try {
+    const community = await Community.findById(req.params.id);
+    
+    if (!community) {
+      return res.status(404).json({
+        success: false,
+        message: 'Community not found',
+      });
+    }
+    
+    const isMember = community.members.some((m) => m.userId.equals(req.user.userId));
+    if (!isMember) {
+      return res.status(403).json({
+        success: false,
+        message: 'Must be a member to view messages',
+      });
+    }
+    
+    const { limit = 50, before } = req.query;
+    const filter = { communityId: req.params.id };
+    
+    if (before) {
+      filter.createdAt = { $lt: new Date(before) };
+    }
+    
+    const messages = await Message.find(filter)
+      .populate('userId', 'fullName profile.avatar')
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit));
+    
+    res.json({
+      success: true,
+      count: messages.length,
+      messages,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * Send message to community
+ * POST /api/community/:id/messages
+ * Body: { content }
+ */
+router.post('/:id/messages', verifyToken, async (req, res, next) => {
+  try {
+    const { content } = req.body;
+    
+    if (!content || !content.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Message content is required',
+      });
+    }
+    
+    const community = await Community.findById(req.params.id);
+    
+    if (!community) {
+      return res.status(404).json({
+        success: false,
+        message: 'Community not found',
+      });
+    }
+    
+    const isMember = community.members.some((m) => m.userId.equals(req.user.userId));
+    if (!isMember) {
+      return res.status(403).json({
+        success: false,
+        message: 'Must be a member to send messages',
+      });
+    }
+    
+    const user = await User.findById(req.user.userId);
+    const userName = user?.fullName || 'Anonymous';
+    
+    const message = new Message({
+      communityId: req.params.id,
+      userId: req.user.userId,
+      content: content.trim(),
+      userName,
+    });
+    
+    await message.save();
+    
+    await message.populate('userId', 'fullName profile.avatar');
+    
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`community:${req.params.id}`).emit('community-message', {
+        message,
+      });
+    }
+    
+    res.status(201).json({
+      success: true,
+      message,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * Report message
+ * POST /api/community/:id/messages/:messageId/report
+ * Body: { reason }
+ */
+router.post('/:id/messages/:messageId/report', verifyToken, async (req, res, next) => {
+  try {
+    const message = await Message.findById(req.params.messageId);
+    
+    if (!message) {
+      return res.status(404).json({
+        success: false,
+        message: 'Message not found',
+      });
+    }
+    
+    message.isReported = true;
+    message.reportReason = req.body.reason || 'Inappropriate content';
+    message.reportedBy = req.user.userId;
+    message.reportedAt = new Date();
+    
+    await message.save();
+    
+    res.json({
+      success: true,
+      message: 'Message reported',
+    });
+  } catch (error) {
+    next(error);
+  }
+});

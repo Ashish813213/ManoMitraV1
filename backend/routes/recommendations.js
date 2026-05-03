@@ -1,9 +1,128 @@
 const express = require('express');
-const { Recommendation, Resource, User, Journal, MoodHistory } = require('../models');
+const { Recommendation, Resource, User, Journal, MoodHistory, Exercise, UserExerciseProgress, Community } = require('../models');
 const { verifyToken } = require('../middleware/auth');
-const authorize = require('../middleware/authorize');
+const axios = require('axios');
 
 const router = express.Router();
+
+const GENERATION_CHAT_URL = process.env.GENERATION_CHAT_API_URL || 'http://localhost:5001';
+
+/**
+ * Generate dynamic recommendations based on user behavior
+ * POST /api/recommendations/generate
+ */
+router.post('/generate', verifyToken, async (req, res, next) => {
+  try {
+    const userId = req.user.userId;
+    
+    const moodHistory = await MoodHistory.find({ userId })
+      .sort({ date: -1 })
+      .limit(14);
+    
+    const journalEntries = await Journal.find({ userId })
+      .sort({ createdAt: -1 })
+      .limit(5);
+    
+    const completedExercises = await UserExerciseProgress.find({ userId, completed: true })
+      .sort({ completedAt: -1 })
+      .limit(5);
+    
+    const communityActivity = await Community.find({
+      'members.userId': userId,
+    }).limit(3);
+    
+    const user = await User.findById(userId);
+    const mentalHealthProfile = user?.mentalHealthProfile || {};
+    
+    let moodTrend = 'stable';
+    if (moodHistory.length >= 7) {
+      const recentAvg = moodHistory.slice(0, 3).reduce((s, e) => s + e.moodScore, 0) / 3;
+      const olderAvg = moodHistory.slice(3, 7).reduce((s, e) => s + e.moodScore, 0) / 4;
+      if (recentAvg - olderAvg > 1.5) moodTrend = 'improving';
+      else if (olderAvg - recentAvg > 1.5) moodTrend = 'declining';
+    }
+    
+    const emotionCounts = {};
+    moodHistory.forEach((m) => {
+      emotionCounts[m.emotion] = (emotionCounts[m.emotion] || 0) + 1;
+    });
+    const dominantEmotion = Object.keys(emotionCounts).reduce(
+      (a, b) => (emotionCounts[a] > emotionCounts[b] ? a : b),
+      'neutral'
+    );
+    
+    const recommendations = [];
+    
+    if (moodTrend === 'declining' || dominantEmotion === 'sad' || mentalHealthProfile.lastSentimentScore < -0.3) {
+      recommendations.push({
+        type: 'exercise',
+        category: 'stress',
+        reason: 'Mood declining detected',
+        priority: 'high',
+      });
+    }
+    
+    if (dominantEmotion === 'anxious' || mentalHealthProfile.lastSentimentScore < -0.2) {
+      recommendations.push({
+        type: 'exercise',
+        category: 'breathing',
+        reason: 'Anxiety detected',
+        priority: 'high',
+      });
+    }
+    
+    if (!completedExercises.length) {
+      recommendations.push({
+        type: 'exercise',
+        category: 'mindfulness',
+        reason: 'No recent activity',
+        priority: 'medium',
+      });
+    }
+    
+    if (journalEntries.length > 0) {
+      try {
+        const journalText = journalEntries.slice(0, 3).map((j) => j.content).join(' ');
+        const sentimentRes = await axios.post(`${GENERATION_CHAT_URL}/sentiment`, {
+          text: journalText,
+        });
+        if (sentimentRes.data?.sentiment?.sentiment_score < -0.3) {
+          recommendations.push({
+            type: 'resource',
+            category: 'emotional_support',
+            reason: 'Journal sentiment analysis',
+            priority: 'high',
+          });
+        }
+      } catch (e) {
+        console.log('GenerationChat sentiment analysis unavailable');
+      }
+    }
+    
+    if (!communityActivity.length) {
+      recommendations.push({
+        type: 'community',
+        category: 'support',
+        reason: 'Not engaged with community',
+        priority: 'low',
+      });
+    }
+    
+    res.json({
+      success: true,
+      recommendations,
+      analysis: {
+        moodTrend,
+        dominantEmotion,
+        recentMoods: moodHistory.slice(0, 3).map((m) => m.moodScore),
+        completedExercises: completedExercises.length,
+        communityGroups: communityActivity.length,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 
 /**
  * Get Recommendations for User

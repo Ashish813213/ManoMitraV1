@@ -141,4 +141,26 @@ router.get('/progress/history', verifyToken, async (req, res, next) => {
   }
 });
 
+/**
+ * Get breathing exercises (guided)
+ * GET /api/exercises/breathing
+ */
+router.get('/breathing', async (req, res, next) => {
+  try {
+    const exercises = await Exercise.find({
+      type: 'breathing',
+      contentType: 'breathing',
+      isActive: true,
+    });
+
+    res.json({
+      success: true,
+      count: exercises.length,
+      exercises,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 module.exports = router;

@@ -7,6 +7,132 @@ const { checkSafety } = require('../utils/safetyCheck');
 const router = express.Router();
 
 /**
+ * Get mood analytics
+ * GET /api/mood/analytics?period=30
+ */
+router.get('/analytics', verifyToken, async (req, res, next) => {
+  try {
+    const period = parseInt(req.query.period) || 30;
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - period);
+
+    const moodEntries = await MoodHistory.find({
+      userId: req.user.userId,
+      date: { $gte: startDate },
+    }).sort({ date: 1 });
+
+    if (moodEntries.length === 0) {
+      return res.json({
+        success: true,
+        analytics: {
+          averageScore: null,
+          emotionDistribution: {},
+          streakData: { current: 0, longest: 0 },
+          trend: [],
+          bestDay: null,
+          worstDay: null,
+        },
+      });
+    }
+
+    const totalScore = moodEntries.reduce((sum, e) => sum + e.moodScore, 0);
+    const averageScore = totalScore / moodEntries.length;
+
+    const emotionCounts = {};
+    moodEntries.forEach((e) => {
+      emotionCounts[e.emotion] = (emotionCounts[e.emotion] || 0) + 1;
+    });
+
+    const emotionDistribution = {};
+    Object.keys(emotionCounts).forEach((emotion) => {
+      emotionDistribution[emotion] = Math.round((emotionCounts[emotion] / moodEntries.length) * 100);
+    });
+
+    const userActivity = await UserActivity.find({
+      userId: req.user.userId,
+      date: { $gte: startDate },
+    }).sort({ date: 1 });
+
+    let currentStreak = 0;
+    let longestStreak = 0;
+    let tempStreak = 0;
+
+    for (const activity of userActivity) {
+      if (activity.streakCount > 0) {
+        tempStreak = activity.streakCount;
+        if (tempStreak > longestStreak) {
+          longestStreak = tempStreak;
+        }
+      }
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const yesterdayActivity = await UserActivity.findOne({
+      userId: req.user.userId,
+      date: { $gte: new Date(today.getTime() - 86400000) },
+    });
+    currentStreak = yesterdayActivity?.streakCount || 0;
+
+    const dailyTrend = {};
+    moodEntries.forEach((e) => {
+      const dateKey = e.date.toISOString().split('T')[0];
+      if (!dailyTrend[dateKey]) {
+        dailyTrend[dateKey] = [];
+      }
+      dailyTrend[dateKey].push(e.moodScore);
+    });
+
+    const trend = Object.keys(dailyTrend).map((date) => {
+      const scores = dailyTrend[date];
+      const sum = scores.reduce((a, b) => a + b, 0);
+      const avg = sum / scores.length;
+      return {
+        date,
+        averageScore: Math.round(avg * 10) / 10,
+        count: scores.length,
+      };
+    });
+
+    let bestDay = null;
+    let worstDay = null;
+    let bestScore = 0;
+    let worstScore = 11;
+
+    Object.keys(dailyTrend).forEach((date) => {
+      const scores = dailyTrend[date];
+      const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+      if (avg > bestScore) {
+        bestScore = avg;
+        bestDay = date;
+      }
+      if (avg < worstScore) {
+        worstScore = avg;
+        worstDay = date;
+      }
+    });
+
+    res.json({
+      success: true,
+      analytics: {
+        averageScore: Math.round(averageScore * 10) / 10,
+        totalEntries: moodEntries.length,
+        emotionDistribution,
+        streakData: {
+          current: currentStreak,
+          longest: longestStreak,
+        },
+        trend,
+        bestDay,
+        worstDay,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * Log a mood check-in with AI emotion analysis
  * POST /api/mood/log
  * Body: { moodScore: number, note?: string, activity?: string }
