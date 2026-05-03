@@ -30,7 +30,11 @@ type DashboardData = {
 };
 
 const fallbackData: DashboardData = {
-  recommendations: [],
+  recommendations: [
+    { _id: 'rec-1', title: 'Stress Management 101', type: 'article', score: 85 },
+    { _id: 'rec-2', title: 'Sleep Better Tonight', type: 'audio_guide', score: 80 },
+    { _id: 'rec-3', title: 'Anxiety Relief', type: 'workshop', score: 75 },
+  ],
   resources: [
     { _id: 'resource-1', title: 'Stress Management 101', description: 'Practical steps to reduce daily stress and restore balance.', type: 'article', category: 'stress_management', duration: 5, rating: 4.9 },
     { _id: 'resource-2', title: 'Sleep Better Tonight', description: 'A calming audio guide for better sleep and deeper rest.', type: 'audio_guide', category: 'sleep', duration: 15, rating: 4.8 },
@@ -38,7 +42,8 @@ const fallbackData: DashboardData = {
     { _id: 'resource-4', title: 'Start Meditation', description: 'Beginner meditation designed to settle the mind quickly.', type: 'meditation', category: 'mindfulness', duration: 10, rating: 4.9 },
   ],
   workshops: [
-    { _id: 'workshop-1', title: 'Anxiety Relief Workshop', description: 'Live group support with a therapist-led practice session.', type: 'workshop', category: 'anxiety', scheduledAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), duration: 45, currentParticipants: 18, maxParticipants: 25, facilitatorName: 'Dr. Sarah Johnson' },
+    { _id: 'workshop-1', title: 'Sleep and Relaxation Webinar', description: 'Expert discussion on improving sleep quality.', type: 'webinar', category: 'sleep_wellness', scheduledAt: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(), duration: 45, facilitatorName: 'Therapist-led', currentParticipants: 0, maxParticipants: 100 },
+    { _id: 'workshop-2', title: 'Mindfulness Workshop', description: 'Learn mindfulness techniques for daily practice.', type: 'workshop', category: 'mindfulness', scheduledAt: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString(), duration: 90, facilitatorName: 'Therapist-led', currentParticipants: 0, maxParticipants: 20 },
   ],
   communities: [
     { _id: 'community-1', name: 'Anxiety Support Group', description: 'A safe space to talk, learn, and connect.', category: 'anxiety_support', totalMembers: 124 },
@@ -214,9 +219,9 @@ export default function Dashboard() {
     ? getStatsCards(stats)
     : getStatsCards({ streak: 0, sessions: 0, progress: 0, goal: 'Get Started', activeDaysThisWeek: 0, totalMinutes: 0, moodEntriesCount: 0, today: { sessionsCompleted: 0, journalEntries: 0, exercisesCompleted: 0, moodCheckIns: 0, minutesSpent: 0 } });
 
-  const featuredResources = data.resources.slice(0, 3);
-  const featuredWorkshops = data.workshops.slice(0, 2);
-  const featuredCommunities = data.communities.slice(0, 2);
+  const featuredResources = data.resources.length > 0 ? data.resources.slice(0, 3) : fallbackData.resources.slice(0, 3);
+  const featuredWorkshops = data.workshops.length > 0 ? data.workshops.slice(0, 2) : fallbackData.workshops.slice(0, 2);
+  const featuredCommunities = data.communities.length > 0 ? data.communities.slice(0, 2) : fallbackData.communities.slice(0, 2);
 
   if (authLoading || !user) {
     return (
