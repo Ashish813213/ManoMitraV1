@@ -292,41 +292,46 @@ async function seedDatabase() {
     await mongoose.connect(process.env.MONGO_URI);
     console.log('Connected to MongoDB');
 
-    // Clear existing collections
-    await User.deleteMany({});
+    // Clear existing content collections (do NOT delete users)
     await Therapist.deleteMany({});
     await Resource.deleteMany({});
     await Workshop.deleteMany({});
     await Community.deleteMany({});
-    console.log('✓ Cleared existing collections');
+    console.log('✓ Cleared existing content collections (users preserved)');
 
-    // Create therapist users first
-    let therapistIds = [];
+    // Create therapist users first (skip if duplicate email)
+    let therapistProfileIds = [];
+    let therapistUserIds = [];
     for (const therapistData of SAMPLE_DATA.therapists) {
-      const therapist = new User({
-        fullName: therapistData.name,
-        email: therapistData.email,
-        passwordHash: 'hashed_password', // In production, hash this properly
-        role: 'therapist',
-      });
+      let therapist = await User.findOne({ email: therapistData.email });
+      if (!therapist) {
+        therapist = new User({
+          fullName: therapistData.name,
+          email: therapistData.email,
+          passwordHash: 'hashed_password',
+          role: 'therapist',
+        });
+        await therapist.save();
+      }
+      therapistUserIds.push(therapist._id);
 
-      await therapist.save();
-      therapistIds.push(therapist._id);
-
-      // Create Therapist profile
-      const therapistProfile = new Therapist({
-        userId: therapist._id,
-        qualifications: therapistData.qualifications,
-        experienceYears: therapistData.experienceYears,
-        specialization: therapistData.specialization,
-        availability: therapistData.availability,
-        rating: therapistData.rating,
-        licenseNumber: therapistData.licenseNumber,
-        hourlyRate: therapistData.hourlyRate,
-        isVerified: true,
-      });
-
-      await therapistProfile.save();
+      // Create or update Therapist profile
+      let therapistProfile = await Therapist.findOne({ userId: therapist._id });
+      if (!therapistProfile) {
+        therapistProfile = new Therapist({
+          userId: therapist._id,
+          qualifications: therapistData.qualifications,
+          experienceYears: therapistData.experienceYears,
+          specialization: therapistData.specialization,
+          availability: therapistData.availability,
+          rating: therapistData.rating,
+          licenseNumber: therapistData.licenseNumber,
+          hourlyRate: therapistData.hourlyRate,
+          isVerified: true,
+        });
+        await therapistProfile.save();
+      }
+      therapistProfileIds.push(therapistProfile._id);
       console.log(`✓ Created therapist: ${therapistData.name}`);
     }
 
@@ -335,7 +340,7 @@ async function seedDatabase() {
     for (const resourceData of SAMPLE_DATA.resources) {
       const resource = new Resource({
         ...resourceData,
-        author: therapistIds[0], // Assign to first therapist
+        author: therapistProfileIds[0], // Assign to first therapist
       });
 
       await resource.save();
@@ -347,7 +352,7 @@ async function seedDatabase() {
     for (const workshopData of SAMPLE_DATA.workshops) {
       const workshop = new Workshop({
         ...workshopData,
-        facilitator: therapistIds[Math.floor(Math.random() * therapistIds.length)],
+        facilitator: therapistProfileIds[Math.floor(Math.random() * therapistProfileIds.length)],
       });
 
       await workshop.save();
@@ -366,10 +371,10 @@ async function seedDatabase() {
         isPublic: communityData.isPublic,
         allowAnonymousPosts: communityData.allowAnonymousPosts,
         tags: communityData.tags,
-        moderators: [therapistIds[0]],
+        moderators: [therapistUserIds[0]],
         posts: communityData.posts.map((post) => ({
           ...post,
-          userId: therapistIds[0],
+          userId: therapistUserIds[0],
         })),
       });
 

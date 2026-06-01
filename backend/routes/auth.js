@@ -106,6 +106,58 @@ router.post('/login', async (req, res, next) => {
 });
 
 /**
+ * Forgot Password (reset without old password)
+ * POST /api/auth/forgot-password
+ * Body: { email, newPassword, confirmNewPassword }
+ */
+router.post('/forgot-password', async (req, res, next) => {
+  try {
+    const { email, newPassword, confirmNewPassword } = req.body;
+
+    if (!email || !newPassword || !confirmNewPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email, new password, and confirmation are required',
+      });
+    }
+
+    const user = await User.findOne({ email, isAnonymous: false });
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'No account found with this email',
+      });
+    }
+
+    const passwordValidation = validatePassword(newPassword);
+    if (!passwordValidation.isValid) {
+      return res.status(400).json({
+        success: false,
+        errors: passwordValidation.errors,
+      });
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Passwords do not match',
+      });
+    }
+
+    user.passwordHash = newPassword;
+
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'Password reset successfully. You can now log in with your new password.',
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * Anonymous Login
  * POST /api/auth/anonymous
  */
