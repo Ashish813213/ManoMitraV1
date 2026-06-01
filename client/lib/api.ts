@@ -89,6 +89,24 @@ export async function login(payload: LoginPayload): Promise<AuthResponse> {
   return data;
 }
 
+export type ForgotPasswordPayload = {
+  email: string;
+  newPassword: string;
+  confirmNewPassword: string;
+};
+
+export type ForgotPasswordResponse = {
+  success: boolean;
+  message: string;
+};
+
+export async function forgotPassword(payload: ForgotPasswordPayload): Promise<ForgotPasswordResponse> {
+  return apiFetch<ForgotPasswordResponse>('/auth/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function getProfile(): Promise<{ success: boolean; user: AuthUser }> {
   return apiFetch('/users/profile');
 }
@@ -159,6 +177,10 @@ export async function fetchCommunities() {
 
 export async function fetchResources() {
   return apiFetch<{ success?: boolean; resources?: DashboardResource[] }>('/resources?limit=6');
+}
+
+export async function fetchResource(id: string) {
+  return apiFetch<{ success: boolean; resource: DashboardResource }>(`/resources/${id}`);
 }
 
 // Stats types

@@ -88,7 +88,7 @@ export default function ResourcesPage() {
         ) : (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {filtered.map((resource) => (
-              <div key={resource._id} className="rounded-[2rem] border border-white/80 bg-white p-6 shadow-[0_18px_40px_rgba(15,23,42,0.08)] hover:-translate-y-1 transition">
+              <Link key={resource._id} href={`/resources/${resource._id}`} className="block rounded-[2rem] border border-white/80 bg-white p-6 shadow-[0_18px_40px_rgba(15,23,42,0.08)] hover:-translate-y-1 transition">
                 <div className="mb-4 flex items-center justify-between">
                   <span className="rounded-full bg-sky-100 px-3 py-1 text-xs font-semibold text-sky-700 uppercase tracking-wide">
                     {getResourceLabel(resource.type)}
@@ -101,17 +101,10 @@ export default function ResourcesPage() {
                   <span>{resource.duration ? `${resource.duration} min` : 'Flexible'}</span>
                   <span>{resource.rating ? `★ ${resource.rating.toFixed(1)}` : 'Curated'}</span>
                 </div>
-                <button
-                  onClick={async () => {
-                    if (resource._id) {
-                      try { await markRecommendationAsCompleted(resource._id); } catch {}
-                    }
-                  }}
-                  className="mt-4 w-full rounded-full bg-sky-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-sky-700"
-                >
-                  Mark as Complete
-                </button>
-              </div>
+                <span className="mt-4 inline-block w-full rounded-full bg-sky-600 px-5 py-2 text-sm font-semibold text-white text-center transition hover:bg-sky-700">
+                  View Resource
+                </span>
+              </Link>
             ))}
           </div>
         )}

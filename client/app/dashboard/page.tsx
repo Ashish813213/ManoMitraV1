@@ -377,8 +377,9 @@ export default function Dashboard() {
           </div>
           <div className="grid gap-6 md:grid-cols-3">
             {featuredResources.map((resource, index) => (
-              <article
+              <Link
                 key={resource._id}
+                href={resource.type === 'exercise' ? `/meditation?id=${resource._id}` : `/resources/${resource._id}`}
                 className={`group rounded-[1.75rem] p-6 text-white shadow-[0_18px_40px_rgba(15,23,42,0.14)] transition hover:-translate-y-1 ${
                   index === 0 ? 'bg-gradient-to-br from-sky-600 to-cyan-500'
                     : index === 1 ? 'bg-gradient-to-br from-slate-900 to-slate-700'
@@ -397,7 +398,7 @@ export default function Dashboard() {
                   <span>{resource.duration ? `${resource.duration} min` : 'Flexible length'}</span>
                   <span>{resource.rating ? `${resource.rating.toFixed(1)} rating` : 'Curated'}</span>
                 </div>
-              </article>
+              </Link>
             ))}
           </div>
         </section>
@@ -415,7 +416,7 @@ export default function Dashboard() {
             </div>
             <div className="space-y-4">
               {featuredWorkshops.map((workshop) => (
-                <div key={workshop._id} className="rounded-2xl border border-slate-100 bg-slate-50 p-5">
+                <Link key={workshop._id} href="/therapy" className="block rounded-2xl border border-slate-100 bg-slate-50 p-5 transition hover:border-sky-200 hover:bg-sky-50">
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <h3 className="font-semibold text-slate-900">{workshop.title}</h3>
@@ -434,7 +435,7 @@ export default function Dashboard() {
                       {workshop.scheduledAt ? new Date(workshop.scheduledAt).toISOString().split('T')[0] : 'Soon'}
                     </span>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           </div>
@@ -451,7 +452,7 @@ export default function Dashboard() {
             </div>
             <div className="space-y-4">
               {featuredCommunities.map((community) => (
-                <div key={community._id} className="rounded-2xl border border-slate-100 bg-slate-50 p-5 transition hover:border-sky-200 hover:bg-sky-50">
+                <Link key={community._id} href="/community" className="block rounded-2xl border border-slate-100 bg-slate-50 p-5 transition hover:border-sky-200 hover:bg-sky-50">
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <h3 className="font-semibold text-slate-900">{community.name}</h3>
@@ -464,7 +465,7 @@ export default function Dashboard() {
                   <div className="mt-4 text-xs font-medium text-slate-500">
                     Category: <span className="font-semibold text-slate-700">{community.category ?? 'general'}</span>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           </div>
